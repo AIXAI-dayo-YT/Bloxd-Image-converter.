@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bloxd ドット絵コンバーター (静止画)</title>
+    <title>Bloxd Code Block ドット絵コンバーター</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+        // Tailwindの設定をよりモダンなパレットに調整
         tailwind.config = {
             theme: {
                 extend: {
@@ -13,9 +14,12 @@
                         sans: ['Inter', 'sans-serif'],
                     },
                     colors: {
-                        'bloxd-blue': '#4a90e2',
-                        'bloxd-dark': '#1e293b',
-                        'bloxd-wool': '#f3f4f6',
+                        'bloxd-primary': '#3b82f6', // Blue for main actions
+                        'bloxd-secondary': '#10b981', // Green for success/conversion
+                        'bloxd-dark-bg': '#f8fafc', // Light background
+                        'bloxd-card-bg': '#ffffff',
+                        'bloxd-wool': '#f1f5f9', // Soft background for input area
+                        'code-dark': '#1f2937', // Dark for code block
                     }
                 }
             }
@@ -26,6 +30,7 @@
             font-family: 'Inter', sans-serif;
             background-color: #f0f4f8;
         }
+        /* カスタムスクロールバー (コードエリア用) */
         .custom-scrollbar::-webkit-scrollbar {
             width: 8px;
         }
@@ -35,131 +40,150 @@
         }
         /* ピクセルアート表示のための設定 */
         .image-rendering-pixelated {
-            image-rendering: optimizeSpeed; /* Webkit browsers */
-            image-rendering: -moz-crisp-edges; /* Firefox */
-            image-rendering: -o-crisp-edges; /* Opera */
-            image-rendering: pixelated; /* Standard */
+            image-rendering: optimizeSpeed; 
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -o-crisp-edges; 
+            image-rendering: pixelated;
+        }
+        /* アクティブなタブボタンのデザインを改善 */
+        .tab-button.active {
+            background-color: #10b981;
+            color: white;
+            font-weight: 600;
+            border-bottom: 3px solid #059669; /* より濃い色で強調 */
         }
     </style>
 </head>
-<body class="p-4 sm:p-8 bg-bloxd-dark min-h-screen flex justify-center">
+<body class="p-4 sm:p-8 bg-bloxd-dark-bg min-h-screen flex justify-center items-start">
 
-    <div id="app" class="w-full max-w-4xl bg-white shadow-2xl rounded-xl p-6 sm:p-10">
+    <div id="app" class="w-full max-w-4xl bg-bloxd-card-bg shadow-2xl rounded-xl p-6 sm:p-10 my-8">
         
-        <h1 class="text-3xl sm:text-4xl font-extrabold text-red-600 mb-2 text-center">
-            🧱 Bloxd ドット絵コンバーター
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-bloxd-primary mb-2 text-center border-b pb-3">
+            🧱 Bloxd Code Block ドット絵コンバーター
         </h1>
-        <p class="text-center text-gray-600 mb-8">
-            画像をブロック配置コードに変換します。解像度 (10x10 〜 100x100) を選択可能です。
+        <p class="text-center text-gray-600 mb-8 mt-2">
+            Code Blockの制限 (15,000文字) に合わせてコードを自動分割し、画像のドット絵を生成します。
         </p>
 
-        <!-- ステップ 1: 設定と入力 -->
-        <div class="space-y-6 mb-10 p-6 bg-bloxd-wool rounded-lg border border-gray-200">
-            <h2 class="text-2xl font-bold text-gray-800 border-b pb-2">ステップ 1: 設定と画像アップロード</h2>
+        <!-- ステップ 1: 設定と入力エリア -->
+        <div class="space-y-8 p-6 bg-bloxd-wool rounded-xl shadow-inner border border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                <span class="bg-bloxd-secondary text-white rounded-full w-8 h-8 flex items-center justify-center mr-3 text-lg">1</span>
+                画像をアップロードと描画設定
+            </h2>
             
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- 設定 -->
-                <div class="col-span-1 md:col-span-1 space-y-3">
-                    <label class="block text-sm font-medium text-gray-700">パレットブロック</label>
-                    <div class="bg-gray-100 p-3 rounded-lg border border-gray-300">
-                        <p class="text-lg font-semibold text-gray-900">Concrete (16色)</p>
-                        <p class="text-xs text-gray-500">ご指定のコンクリートブロックを使用</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- 描画座標設定 -->
+                <div class="col-span-1 space-y-4 p-4 bg-white rounded-lg shadow-md">
+                    <label class="block text-lg font-semibold text-gray-800">
+                        描画開始座標 (X, Y, Z)
+                    </label>
+                    <div class="flex space-x-2">
+                        <input type="number" id="startX" placeholder="X (固定軸)" value="100" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-bloxd-primary focus:border-bloxd-primary transition duration-150 shadow-sm"/>
+                        <input type="number" id="startY" placeholder="Y (高さ)" value="60" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-bloxd-primary focus:border-bloxd-primary transition duration-150 shadow-sm"/>
+                        <input type="number" id="startZ" placeholder="Z (幅)" value="200" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-bloxd-primary focus:border-bloxd-primary transition duration-150 shadow-sm"/>
                     </div>
-
-                    <label for="resolution" class="block text-sm font-medium text-gray-700">解像度 (N x N ブロック)</label>
-                    <select id="resolution" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-bloxd-blue focus:border-bloxd-blue transition duration-150">
-                        <!-- 10から100まで10刻みでオプションを設定 -->
-                        <option value="10">10x10</option>
-                        <option value="20" selected>20x20 (デフォルト)</option>
-                        <option value="30">30x30</option>
-                        <option value="40">40x40</option>
-                        <option value="50">50x50</option>
-                        <option value="60">60x60</option>
-                        <option value="70">70x70</option>
-                        <option value="80">80x80</option>
-                        <option value="90">90x90</option>
-                        <option value="100">100x100</option>
-                    </select>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Code Blockが設置された位置を基準とした絶対座標を入力してください。
+                    </p>
                 </div>
 
-                <!-- ファイル入力 -->
-                <div class="col-span-1 md:col-span-2">
-                    <label for="imageUpload" class="block text-lg font-medium text-gray-800 mb-2">
-                        画像をアップロード
-                    </label>
-                    <input type="file" id="imageUpload" accept="image/*" class="w-full text-sm text-gray-500
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-full file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-bloxd-blue file:text-white
-                        hover:file:bg-indigo-600 cursor-pointer
-                    "/>
-                    <p class="mt-2 text-xs text-gray-500">※変換速度のため、画像のファイルサイズは小さいものが推奨されます。</p>
+                <!-- 解像度とファイル入力 -->
+                <div class="col-span-1 space-y-4 p-4 bg-white rounded-lg shadow-md">
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <div class="flex-1">
+                            <label for="resolution" class="block text-lg font-semibold text-gray-800">解像度 (N x N ブロック)</label>
+                            <select id="resolution" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-bloxd-primary focus:border-bloxd-primary transition duration-150 shadow-sm">
+                                <option value="20" selected>20x20 (400ブロック)</option>
+                                <option value="30">30x30 (900ブロック)</option>
+                                <option value="40">40x40 (1600ブロック)</option>
+                                <option value="50">50x50 (2500ブロック)</option>
+                                <option value="75">75x75 (5625ブロック)</option>
+                                <option value="100">100x100 (10000ブロック)</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label for="imageUpload" class="block text-lg font-semibold text-gray-800">画像をアップロード</label>
+                            <input type="file" id="imageUpload" accept="image/*" class="w-full mt-1 text-sm text-gray-600
+                                file:mr-4 file:py-2 file:px-4
+                                file:rounded-full file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-bloxd-primary file:text-white
+                                hover:file:bg-blue-600 cursor-pointer transition duration-150
+                            "/>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500">パレット: **Concrete (16色)** を使用します。</p>
                 </div>
             </div>
             
             <div class="pt-4 flex justify-center">
                 <button id="convertButton"
-                    class="px-8 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg hover:bg-red-600 transition duration-300 disabled:opacity-50">
-                    🖼️ 画像をブロックコードに変換
+                    class="flex items-center space-x-2 px-10 py-4 bg-bloxd-secondary text-white text-xl font-bold rounded-full shadow-lg hover:bg-emerald-600 transition duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span>🖼️ 変換してコードを生成</span>
                 </button>
             </div>
         </div>
+        
+        <!-- ステップ 2: プレビューと出力エリア -->
+        <div id="outputSection" class="space-y-8 mt-10 p-6 bg-white rounded-xl shadow-lg border border-gray-300" style="display: none;">
+            <h2 class="text-2xl font-bold text-gray-800 flex items-center">
+                <span class="bg-bloxd-secondary text-white rounded-full w-8 h-8 flex items-center justify-center mr-3 text-lg">2</span>
+                プレビューと Code Block 用コード
+            </h2>
 
-        <!-- ステップ 2: プレビューと出力 -->
-        <div id="outputSection" class="space-y-6" style="display: none;">
-            <h2 class="text-2xl font-bold text-gray-800 border-b pb-2">ステップ 2: 結果とBloxdコード</h2>
-
-            <div class="flex flex-col md:flex-row gap-6">
+            <div class="flex flex-col md:flex-row gap-8">
                 <!-- プレビュー -->
-                <div class="md:w-1/3 p-4 bg-gray-100 rounded-lg shadow-inner">
-                    <h3 class="font-semibold text-gray-700 mb-2">変換プレビュー (<span id="previewResolution">20x20</span>)</h3>
-                    <canvas id="previewCanvas" width="20" height="20" class="w-full h-auto rounded-md shadow-lg border border-gray-300 image-rendering-pixelated"></canvas>
-                    <p class="text-xs text-gray-500 mt-2">※変換後のコンクリートブロック色で表示。</p>
+                <div class="md:w-1/3 flex flex-col items-center p-4 bg-gray-50 rounded-lg shadow-inner">
+                    <h3 class="font-bold text-lg text-gray-700 mb-4">変換プレビュー (<span id="previewResolution">20x20</span>)</h3>
+                    <canvas id="previewCanvas" width="20" height="20" class="w-full max-w-xs h-auto rounded-md shadow-xl border-4 border-gray-400 image-rendering-pixelated"></canvas>
+                    <p class="text-xs text-gray-500 mt-3 text-center">
+                        Code Blockで描画されるドット絵の見た目です。
+                    </p>
                 </div>
 
-                <!-- コード出力 -->
+                <!-- コード出力 (タブUI) -->
                 <div class="md:w-2/3">
-                    <h3 class="font-semibold text-gray-700 mb-2">Bloxd World Code (JavaScript)</h3>
-                    <textarea id="outputCode" rows="15" readonly class="w-full p-4 border border-gray-400 rounded-lg bg-gray-900 text-green-400 font-mono text-xs custom-scrollbar"></textarea>
-                    <button id="copyButton" class="mt-3 px-4 py-2 bg-bloxd-blue text-white rounded-lg hover:bg-indigo-600 transition duration-300">
-                        コードをコピー
-                    </button>
-                    <p id="copyMessage" class="mt-2 text-sm text-green-500 hidden">コピーしました！</p>
+                    <h3 class="font-bold text-lg text-gray-700 mb-2">Code Block JavaScript (最大15,000文字で分割)</h3>
+                    <p class="text-xs text-red-600 mb-4 font-bold p-2 bg-red-100 rounded-md">
+                        ⚠️ Code Block ごとに内容をコピーし、順番に Code Block に貼り付けて実行してください。
+                    </p>
+                    
+                    <!-- タブボタン -->
+                    <div id="tabButtons" class="flex border-b-2 border-bloxd-secondary mb-4 overflow-x-auto">
+                        <!-- ボタンはJSで動的に追加されます -->
+                    </div>
+
+                    <!-- タブ内容 -->
+                    <div id="tabContent">
+                        <!-- Code Block のコンテンツはJSで動的に追加されます -->
+                        <p id="copyMessage" class="mt-3 px-3 py-1 bg-green-100 text-green-700 font-semibold rounded inline-block hidden">✅ コピーしました！</p>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div id="loading" class="text-center text-lg text-bloxd-blue font-semibold mt-10 hidden">
-            <div class="animate-spin inline-block w-8 h-8 border-4 border-bloxd-blue border-t-transparent rounded-full"></div>
-            <p class="mt-3">解析とコード生成中...</p>
+        <div id="loading" class="text-center text-xl text-bloxd-secondary font-semibold mt-10 hidden">
+            <div class="animate-spin inline-block w-8 h-8 border-4 border-bloxd-secondary border-t-transparent rounded-full"></div>
+            <p class="mt-3">画像を解析し、Code Block 用のコードを生成中...</p>
         </div>
 
     </div>
 
     <script>
-        // 定数を設定
-        const BASE_BLOCK_TYPE = " Concrete"; // 色名と結合して "Red Concrete" になる
-        const MAX_PREVIEW_SIZE = 400; // プレビューの最大表示サイズ (px)
+        /* 定数を設定 */
+        var BASE_BLOCK_TYPE_FULL = " Concrete"; 
+        var MAX_PREVIEW_SIZE = 400; 
         
-        // ユーザー指定のコンクリートブロックパレット (色名とRGB近似値)
-        const BLOXD_COLORS = {
-            'White': [200, 203, 207],
-            'Light Gray': [135, 137, 140],
-            'Gray': [80, 80, 84],
-            'Black': [25, 27, 30],
-            'Brown': [95, 60, 42],
-            'Red': [142, 38, 32],
-            'Orange': [220, 94, 25],
-            'Yellow': [237, 178, 20],
-            'Lime': [95, 169, 21],
-            'Green': [77, 98, 32],
-            'Cyan': [18, 126, 133],
-            'Light Blue': [65, 137, 186],
-            'Blue': [43, 44, 138],
-            'Purple': [112, 45, 166],
-            'Magenta': [178, 59, 141],
-            'Pink': [215, 108, 138]
+        // ユーザーの要望により、15,000文字制限を適用します。安全マージンとして14,900文字を使用。
+        const MAX_CHARS_PER_CHUNK = 14900; 
+
+        /* ユーザー指定のコンクリートブロックパレット (色名とRGB近似値) */
+        var BLOXD_COLORS = {
+            'White': [200, 203, 207], 'Light Gray': [135, 137, 140], 'Gray': [80, 80, 84], 'Black': [25, 27, 30],
+            'Brown': [95, 60, 42], 'Red': [142, 38, 32], 'Orange': [220, 94, 25], 'Yellow': [237, 178, 20],
+            'Lime': [95, 169, 21], 'Green': [77, 98, 32], 'Cyan': [18, 126, 133], 'Light Blue': [65, 137, 186],
+            'Blue': [43, 44, 138], 'Purple': [112, 45, 166], 'Magenta': [178, 59, 141], 'Pink': [215, 108, 138]
         };
 
         /**
@@ -173,11 +197,12 @@
          * 最も近いBloxdのブロック色を決定 (ユーラミアン距離を使用)
          */
         function findNearestBloxdColor(targetRgb) {
-            let minDistance = Infinity;
-            let nearestColorName = 'White';
+            var minDistance = Infinity;
+            var nearestColorName = 'White';
 
-            for (const [name, rgb] of Object.entries(BLOXD_COLORS)) {
-                const distance = colorDistance(targetRgb, rgb);
+            for (var name in BLOXD_COLORS) {
+                var rgb = BLOXD_COLORS[name];
+                var distance = colorDistance(targetRgb, rgb);
                 if (distance < minDistance) {
                     minDistance = distance;
                     nearestColorName = name;
@@ -187,56 +212,57 @@
         }
         
         /**
-         * 画像を読み込み、指定サイズにリサイズし、Bloxdブロックコードのレイアウトデータを生成
-         * @param {File} file - アップロードされた画像ファイル
-         * @param {number} blockSize - ドット絵のサイズ (例: 20)
-         * @returns {Promise<string[]>} Bloxdの色の名前の配列 (blockSize * blockSize 要素)
+         * 画像を読み込み、指定サイズにリサイズし、Bloxdブロック色名を含むレイアウトデータとプレビューを生成
          */
         function processImageToLayout(file, blockSize) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                const reader = new FileReader();
+            return new Promise(function(resolve, reject) {
+                var img = new Image();
+                var reader = new FileReader();
 
-                reader.onload = (e) => {
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
+                reader.onload = function(e) {
+                    img.onload = function() {
+                        var canvas = document.createElement('canvas');
+                        var ctx = canvas.getContext('2d');
                         canvas.width = blockSize;
                         canvas.height = blockSize;
 
-                        // 画像を指定サイズに描画・リサイズ
+                        /* 画像を指定サイズに描画・リサイズ */
                         ctx.drawImage(img, 0, 0, blockSize, blockSize);
                         
-                        // ピクセルデータを取得
-                        const imageData = ctx.getImageData(0, 0, blockSize, blockSize).data;
-                        const layoutData = [];
+                        /* ピクセルデータを取得 */
+                        var imageData = ctx.getImageData(0, 0, blockSize, blockSize).data;
+                        /* レイアウトデータは、座標情報を持たせたオブジェクトの配列 */
+                        var layoutData = []; 
 
-                        // プレビュー用キャンバスを取得し、リセット
-                        const previewCanvas = document.getElementById('previewCanvas');
-                        const previewCtx = previewCanvas.getContext('2d');
+                        var previewCanvas = document.getElementById('previewCanvas');
+                        var previewCtx = previewCanvas ? previewCanvas.getContext('2d') : null; // Null Check
+
+                        if (previewCtx) {
+                            previewCtx.clearRect(0, 0, blockSize, blockSize); 
+                        } else {
+                            console.error("Preview canvas context is null.");
+                            return reject(new Error("Preview canvas not available."));
+                        }
                         
-                        // キャンバスのサイズが既に更新されていることを前提に、クリア
-                        previewCtx.clearRect(0, 0, blockSize, blockSize); 
-                        
-                        // ピクセルごとに処理
-                        for (let i = 0; i < imageData.length; i += 4) {
-                            const r = imageData[i];
-                            const g = imageData[i + 1];
-                            const b = imageData[i + 2];
+                        /* ピクセルごとに処理 */
+                        for (var i = 0; i < imageData.length; i += 4) {
+                            var r = imageData[i];
+                            var g = imageData[i + 1];
+                            var b = imageData[i + 2];
                             
-                            const bloxdColorName = findNearestBloxdColor([r, g, b]);
-                            layoutData.push(bloxdColorName);
+                            var bloxdColorName = findNearestBloxdColor([r, g, b]);
+                            
+                            var pixelIndex = i / 4;
+                            var z = pixelIndex % blockSize; 
+                            var y = Math.floor(pixelIndex / blockSize); /* Yは行 (高さ) */
+                            
+                            /* 座標と色名を格納 */
+                            layoutData.push({ y: y, z: z, color: bloxdColorName });
 
-                            // プレビュー表示用: 変換後のブロックの色を反映
-                            const bloxdRgb = BLOXD_COLORS[bloxdColorName];
+                            /* プレビュー表示用 */
+                            var bloxdRgb = BLOXD_COLORS[bloxdColorName];
                             previewCtx.fillStyle = "rgb(" + bloxdRgb[0] + "," + bloxdRgb[1] + "," + bloxdRgb[2] + ")";
-                            
-                            const pixelIndex = i / 4;
-                            const x = pixelIndex % blockSize;
-                            const y = Math.floor(pixelIndex / blockSize);
-                            
-                            // キャンバスが既に拡大されているため、1ピクセルずつ描画
-                            previewCtx.fillRect(x, y, 1, 1);
+                            previewCtx.fillRect(z, y, 1, 1);
                         }
 
                         resolve(layoutData);
@@ -250,227 +276,363 @@
         }
         
         /**
-         * メインの処理を実行し、コードを生成する
+         * メインの処理を実行し、Code Block用コードを生成する
          */
         async function startConversion() {
-            const fileInput = document.getElementById('imageUpload');
-            const resolutionSelect = document.getElementById('resolution');
-            const outputCodeElement = document.getElementById('outputCode');
-            const outputSection = document.getElementById('outputSection');
-            const loading = document.getElementById('loading');
+            var fileInput = document.getElementById('imageUpload');
+            var resolutionSelect = document.getElementById('resolution');
+            var startX = document.getElementById('startX');
+            var startY = document.getElementById('startY');
+            var startZ = document.getElementById('startZ');
             
-            const blockSize = parseInt(resolutionSelect.value); // 選択された解像度を取得
+            var outputSection = document.getElementById('outputSection');
+            var loading = document.getElementById('loading');
             
+            var blockSize = parseInt(resolutionSelect.value);
+            var x = parseInt(startX.value);
+            var y = parseInt(startY.value);
+            var z = parseInt(startZ.value);
+
+            // Null Check and error handling for empty file
             if (!fileInput.files[0]) {
-                alert("画像をアップロードしてください。");
+                // Using custom alert style rather than window.alert
+                showCustomMessage("画像をアップロードしてください。", 'error');
+                return;
+            }
+            if (isNaN(x) || isNaN(y) || isNaN(z)) {
+                showCustomMessage("描画開始座標 (X, Y, Z) をすべて数字で入力してください。", 'error');
                 return;
             }
 
-            // UIを更新
-            loading.classList.remove('hidden');
-            outputSection.style.display = 'none';
+            /* UIを更新 */
+            if (loading) loading.classList.remove('hidden');
+            if (outputSection) outputSection.style.display = 'none';
 
-            // プレビューキャンバスのサイズを更新
+            /* プレビューキャンバスのサイズを更新 */
             updatePreviewCanvasSize(blockSize);
 
             try {
-                // 1. レイアウトデータを生成
-                const blockLayout = await processImageToLayout(fileInput.files[0], blockSize);
+                /* 1. レイアウトデータ (Y, Z, Color) を生成 */
+                var blockLayout = await processImageToLayout(fileInput.files[0], blockSize);
                 
-                // 配列をBloxdコードに埋め込むためのJavaScript文字列に変換
-                // これにより、テンプレートリテラル内の競合を避ける
-                let layoutArrayString = '[\n    ';
-                layoutArrayString += blockLayout.map(c => '"' + c + '"').join(', ');
-                layoutArrayString += '\n]';
-
-                // 2. Bloxd World Codeを生成
-                const generatedCode = generateBloxdCode(layoutArrayString, blockSize);
+                /* 2. Code Block用JavaScriptコードを生成 (15000文字未満で分割) */
+                var generatedCodeBlocks = generateBloxdCode_IndividualPositions_SplitByChar(blockLayout, x, y, z, blockSize); // blockSizeを渡す
                 
-                outputCodeElement.value = generatedCode;
+                /* 3. 出力UIにコードを反映 */
+                updateOutputUI(generatedCodeBlocks);
                 
-                // UIを更新
-                document.getElementById('previewResolution').textContent = blockSize + "x" + blockSize;
-                outputSection.style.display = 'block';
-                loading.classList.add('hidden');
+                /* UIを更新 */
+                const previewResolution = document.getElementById('previewResolution');
+                if(previewResolution) previewResolution.textContent = blockSize + "x" + blockSize;
+                if (outputSection) outputSection.style.display = 'block';
+                if (loading) loading.classList.add('hidden');
+                
+                // 初回変換後、Code Block 1をアクティブにする
+                switchTab(1);
 
             } catch (error) {
-                loading.classList.add('hidden');
+                if (loading) loading.classList.add('hidden');
                 console.error("解析エラー:", error);
-                alert("画像の解析中にエラーが発生しました。コンソールを確認してください。");
+                showCustomMessage("画像の解析中にエラーが発生しました。コンソールを確認してください。", 'error');
             }
+        }
+
+        /**
+         * カスタムメッセージ表示（alertの代わり）
+         */
+        function showCustomMessage(message, type = 'info') {
+            const container = document.getElementById('app');
+            const messageId = 'custom-temp-message';
+            
+            // 既存のメッセージがあれば削除
+            let existing = document.getElementById(messageId);
+            if (existing) existing.remove();
+            
+            const messageElement = document.createElement('div');
+            messageElement.id = messageId;
+            messageElement.textContent = message;
+            messageElement.className = `fixed top-4 right-4 p-4 rounded-lg shadow-xl text-white font-bold z-50 transition-transform transform duration-300 ${
+                type === 'error' ? 'bg-red-600' : 'bg-bloxd-primary'
+            }`;
+            
+            container.appendChild(messageElement);
+            
+            setTimeout(() => {
+                messageElement.style.transform = 'translateX(120%)';
+                messageElement.addEventListener('transitionend', () => messageElement.remove());
+            }, 3000);
         }
         
         /**
          * プレビューキャンバスのHTML属性とスタイルを更新
          */
         function updatePreviewCanvasSize(blockSize) {
-            const previewCanvas = document.getElementById('previewCanvas');
+            var previewCanvas = document.getElementById('previewCanvas');
+            if (!previewCanvas) return; // Null Check
+
+            var ctx = previewCanvas.getContext('2d');
             
-            // 内部解像度を設定
             previewCanvas.width = blockSize;
             previewCanvas.height = blockSize;
             
-            // ピクセルアート感を出すために、高倍率で描画 (CSSで表示サイズを制御)
-            const scale = MAX_PREVIEW_SIZE / blockSize;
-            
-            // CSSスタイルで表示サイズを設定
-            previewCanvas.style.width = (blockSize * scale) + 'px';
-            previewCanvas.style.height = (blockSize * scale) + 'px';
+            // プレビュー表示サイズを一定の最大サイズに収まるようにスケール
+            var containerWidth = previewCanvas.parentElement.offsetWidth * 0.9;
+            var size = Math.min(containerWidth, MAX_PREVIEW_SIZE);
 
-            const ctx = previewCanvas.getContext('2d');
-            
-            // コンテキストのスケールをリセットしてから再設定
-            ctx.setTransform(1, 0, 0, 1, 0, 0); // リセット
-            ctx.scale(scale, scale);
-            ctx.imageSmoothingEnabled = false;
-        }
+            previewCanvas.style.width = size + 'px';
+            previewCanvas.style.height = size + 'px';
 
-        /**
-         * 最終的なBloxd World Code (JavaScript) を構築する
-         * @param {string} layoutArrayString - 文字列化されたレイアウト配列 (N*N 要素)
-         * @param {number} blockSize - ドット絵のサイズ
-         * @returns {string} 完全なBloxd World Code
-         */
-        function generateBloxdCode(layoutArrayString, blockSize) {
-            // 安全な文字列結合を使用し、Bloxd環境でのSyntaxErrorを完全に回避
-            
-            let code = "";
-            code += "// ==========================================================\n";
-            code += "// \uD83D\uDCBB Bloxd \u30C9\u30C3\u30C8\u7D75\u30B3\u30F3\u30D0\u30FC\u30BF\u30FC\u306B\u3088\u308B\u751F\u6210\u30B3\u30FC\u30C9 (\u9759\u6B62\u753B)\n";
-            code += "// ==========================================================\n";
-            code += "\n";
-            code += "// \u8A2D\u7F6E\u65B9\u6CD5: \u91D1\u30D6\u30ED\u30C3\u30AF\u3092\u6301\u3063\u3066\u30EF\u30FC\u30EB\u30C9\u3092\u30AF\u30EA\u30C3\u30AF\u3059\u308B\u3068\u30AD\u30E3\u30F3\u30D0\u30B9\u304C\u751F\u6210\u3055\u308C\u3001\n";
-            code += "//           \u30C1\u30E3\u30C3\u30C8\u3067 /draw \u3068\u5165\u529B\u3059\u308B\u3068\u30C9\u30C3\u30C8\u7D75\u304C\u63CF\u753B\u3055\u308C\u307E\u3059\u3002\n";
-            code += "\n";
-            code += "// ==========================================================\n";
-            code += "// A. \u5B9A\u6570\u3068\u30C7\u30FC\u30BF\n";
-            code += "// ==========================================================\n";
-            code += 'const CANVAS_BLOCK = "White Concrete";\n';
-            code += 'const DRAW_BLOCK_TYPE = " Concrete"; // \u4F8B: "Red" + " Concrete" = "Red Concrete"\n';
-            code += 'const CANVAS_SIZE = ' + blockSize + '; // ' + blockSize + 'x' + blockSize + '\n';
-            code += "\n";
-            code += "// \u30B5\u30A4\u30C8\u751F\u6210\u30C7\u30FC\u30BF: \u30D6\u30ED\u30C3\u30AF\u30EC\u30A4\u30A2\u30A6\u30C8 (N*N \u8981\u7D20)\n";
-            code += "const BLOCK_LAYOUT = " + layoutArrayString + ";\n";
-            code += "\n";
-            code += "// ==========================================================\n";
-            code += "// B. \u63CF\u753B\u51E6\u7406\n";
-            code += "// ==========================================================\n";
-            code += "let canvasStartPos = {x: 0, y: 0, z: 0}; // \u30D7\u30EC\u30A4\u30E4\u30FC\u304C\u91D1\u30D6\u30ED\u30C3\u30AF\u3067\u8A2D\u5B9A\u3059\u308B\n";
-            code += "\n";
-            code += "function _drawDotArt() {\n";
-            code += "    if (BLOCK_LAYOUT.length !== CANVAS_SIZE * CANVAS_SIZE) {\n";
-            code += '        api.sendMessage("All", "⚠️ \u30EC\u30A4\u30A2\u30A6\u30C8\u30C7\u30FC\u30BF\u304C\u4E0D\u6B63\u3067\u3059 (" + BLOCK_LAYOUT.length + "\u8981\u7D20)\u3002");\n';
-            code += "        return;\n";
-            code += "    }\n";
-            code += "\n";
-            code += "    // \u30EC\u30A4\u30A2\u30A6\u30C8\u30C7\u30FC\u30BF\u306B\u57FA\u3065\u3044\u3066\u30D6\u30ED\u30C3\u30AF\u3092\u66F4\u65B0\n";
-            code += "    for (let y = 0; y < CANVAS_SIZE; y++) {\n";
-            code += "        for (let z = 0; z < CANVAS_SIZE; z++) {\n";
-            code += "            const blockIndex = y * CANVAS_SIZE + z;\n";
-            code += "            const colorName = BLOCK_LAYOUT[blockIndex];\n";
-            code += "            \n";
-            code += "            // X\u8EF8\u306B\u5782\u76F4\u306A\u7E26\u578B\u30AD\u30E3\u30F3\u30D0\u30B9\u306B\u8A2D\u7F6E\n";
-            code += "            const wx = canvasStartPos.x;\n";
-            code += "            const wy = canvasStartPos.y + y;\n";
-            code += "            const wz = canvasStartPos.z + z;\n";
-            code += "            \n";
-            code += "            // \u8272\u540D\u3068\u30D6\u30ED\u30C3\u30AF\u30BF\u30A4\u30D7\u3092\u7D50\u5408 \n";
-            code += "            api.setBlock(wx, wy, wz, colorName + DRAW_BLOCK_TYPE); \n";
-            code += "        }\n";
-            code += "    }\n";
-            code += '    api.sendMessage("All", "\u2705 \u30C9\u30C3\u30C8\u7D75\u3092\u63CF\u753B\u3057\u307E\u3057\u305F\uFF01");\n';
-            code += "}\n";
-            code += "\n";
-            code += "\n";
-            code += "// ==========================================================\n";
-            code += "// C. \u30D7\u30EC\u30A4\u30E4\u30FC\u30B3\u30DE\u30F3\u30C9\u3068\u30AD\u30E3\u30F3\u30D0\u30B9\u751F\u6210\n";
-            code += "// ==========================================================\n";
-            code += "playerCommand = (p, message) => {\n";
-            code += '    if (message === "/draw") {\n';
-            code += "        if (canvasStartPos.x === 0 && canvasStartPos.y === 0 && canvasStartPos.z === 0) {\n";
-            code += '             api.sendMessage(p, "\u26A0\uFE0F \u307E\u305A\u91D1\u30D6\u30ED\u30C3\u30AF\u3067\u30AD\u30E3\u30F3\u30D0\u30B9\u3092\u751F\u6210\u3057\u3066\u304F\u3060\u3055\u3044\u3002");\n';
-            code += "             return true;\n";
-            code += "        }\n";
-            code += "        _drawDotArt();\n";
-            code += "        return true;\n";
-            code += "    }\n";
-            code += "    return false;\n";
-            code += "};\n";
-            code += "\n";
-            code += "// \u91D1\u30D6\u30ED\u30C3\u30AF\u3092\u6301\u3063\u3066\u30AF\u30EA\u30C3\u30AF\u3059\u308B\u3068\u30AD\u30E3\u30F3\u30D0\u30B9\u3092\u751F\u6210\u3057\u3001\u5EA7\u6A19\u3092\u4FDD\u5B58\n";
-            code += "onPlayerAltAction = (p, x, y, z, block, targetEId) => {\n";
-            code += '    if (block !== "Block of Gold") return;\n';
-            code += "\n";
-            code += "    const playerPos = api.getPosition(p);\n";
-            code += "    const facingInfo = api.getPlayerFacingInfo(p);\n";
-            code += "    if (!facingInfo || !facingInfo.dir) return;\n";
-            code += "\n";
-            code += "    const dir = facingInfo.dir;\n";
-            code += "    const horizontalLength = Math.sqrt(dir[0] * dir[0] + dir[2] * dir[2]);\n";
-            code += "    if (horizontalLength === 0) return; \n";
-            code += "    \n";
-            code += "    const CANVAS_OFFSET_DIST = 10;\n";
-            code += "    const unitX = dir[0] / horizontalLength;\n";
-            code += "    const unitZ = dir[2] / horizontalLength;\n";
-            code += "    \n";
-            code += "    const centerX = Math.floor(playerPos[0] + unitX * CANVAS_OFFSET_DIST);\n";
-            code += "    const centerZ = Math.floor(playerPos[2] + unitZ * CANVAS_OFFSET_DIST);\n";
-            code += "    \n";
-            code += "    const startX = centerX;\n";
-            code += "    const startY_canvas = Math.floor(playerPos[1]); \n";
-            code += "    const startZ = centerZ - Math.floor(CANVAS_SIZE / 2); \n";
-            code += "\n";
-            code += "    // \u30B0\u30ED\u30FC\u30D0\u30EB\u5909\u6570\u306B\u5EA7\u6A19\u3092\u4FDD\u5B58\n";
-            code += "    canvasStartPos = { x: startX, y: startY_canvas, z: startZ };\n";
-            code += "\n";
-            code += "    // \u30AD\u30E3\u30F3\u30D0\u30B9\u3092\u30EF\u30FC\u30EB\u30C9\u306B\u8A2D\u7F6E (\u521D\u671F\u5316\u3068\u3057\u3066White Concrete\u3092\u4F7F\u7528)\n";
-            code += "    for (let Y = 0; Y < CANVAS_SIZE; Y++) {\n";
-            code += "        for (let Z = 0; Z < CANVAS_SIZE; Z++) {\n";
-            code += "            api.setBlock(startX, startY_canvas + Y, startZ + Z, CANVAS_BLOCK);\n";
-            code += "        }\n";
-            code += "    }\n";
-            code += '    api.sendMessage(p, "\u2705 \u30AD\u30E3\u30F3\u30D0\u30B9\u3092\u751F\u6210\u3057\u307E\u3057\u305F\uFF01\u30C1\u30E3\u30C3\u30C8\u3067 /draw \u3068\u5165\u529B\u3057\u3066\u63CF\u753B\u3057\u307E\u3059\u3002");\n';
-            code += '    return "preventAction";\n';
-            code += "};\n";
-            
-            return code;
-        }
-        
-        // コードをクリップボードにコピー
-        function copyCode() {
-            const outputCodeElement = document.getElementById('outputCode');
-            outputCodeElement.select();
-            // document.execCommand('copy') は非推奨ですが、iFrame内で確実なため使用
-            try {
-                document.execCommand('copy');
-                const copyMessage = document.getElementById('copyMessage');
-                copyMessage.classList.remove('hidden');
-                setTimeout(() => copyMessage.classList.add('hidden'), 2000);
-            } catch (err) {
-                console.error('Copy command failed:', err);
+            if (ctx) { // Null Check
+                ctx.setTransform(1, 0, 0, 1, 0, 0); 
+                // キャンバスのピクセルを等倍で描画するために、描画内容のスケールは1にする
+                // 実際の拡大はCSSのimage-rendering: pixelated; と width/heightで行う
+                ctx.imageSmoothingEnabled = false;
             }
         }
 
-        // DOMContentLoaded後にイベントリスナーを設定
-        document.addEventListener('DOMContentLoaded', () => {
-            const resolutionSelect = document.getElementById('resolution');
+        /**
+         * 最終的なBloxd Code Block用JavaScriptコードを構築する (個別コマンド、15000文字以内)
+         * @param {Array<{y: number, z: number, color: string}>} layoutData 変換済みレイアウトデータ
+         * @param {number} startX X座標
+         * @param {number} startY Y座標
+         * @param {number} startZ Z座標
+         * @param {number} blockSize ドット絵の辺の長さ
+         * @returns {string[]} 分割されたCode Blockのコード文字列の配列
+         */
+        function generateBloxdCode_IndividualPositions_SplitByChar(layoutData, startX, startY, startZ, blockSize) {
             
-            // 初期解像度でキャンバスをセットアップ
+            // 15000文字制限に対し、安全マージンとして14900文字を使用
+            const MAX_CHARS_PER_CHUNK = 14900; 
+
+            // 1. すべてのブロックの座標をapi.setBlock(x, y, z, "Block")形式のコマンドとして生成
+            const allCommands = layoutData.map(item => {
+                
+                // 【座標反転】: BloxdのY軸は上向き（高さ）、画像のY軸は下向き
+                // 画像のY座標 (item.y): 0(上)からblockSize-1(下)に増加
+                // BloxdのY座標 (wy): startY(下)から上に増加
+                // 上下反転を修正するため、[blockSize - 1 - item.y] を計算してマッピング
+                const reversedY = blockSize - 1 - item.y; 
+                
+                // 【Z軸反転】: 左右反転を修正するため、Z軸も反転
+                const reversedZ = blockSize - 1 - item.z; 
+
+                // Xは固定（壁の厚み方向）
+                const wx = startX;
+                // Yは高さ方向（上下反転を修正）
+                const wy = startY + reversedY; 
+                // Zは幅方向（左右反転を修正）
+                const wz = startZ + reversedZ; 
+
+                const blockName = item.color + BASE_BLOCK_TYPE_FULL;
+                
+                // 座標の配列ではなく、個別の引数を使用
+                return `api.setBlock(${wx},${wy},${wz},"${blockName}")`;
+            });
+            
+            const codeBlockChunks = [];
+            let currentChunk = [];
+            let currentLength = 0;
+
+            // 2. コマンドリストを文字数制限で分割
+            allCommands.forEach((command) => {
+                // コマンドの後に続く区切り文字 (カンマ) の長さを考慮し +1
+                const commandLength = command.length + 1; 
+
+                if (currentLength + commandLength > MAX_CHARS_PER_CHUNK && currentChunk.length > 0) {
+                    // 現在のチャンクを終了し、新しいチャンクを開始
+                    codeBlockChunks.push(currentChunk);
+                    currentChunk = [];
+                    currentLength = 0;
+                }
+                
+                currentChunk.push(command);
+                currentLength += commandLength;
+            });
+            
+            // 最後のチャンクを追加
+            if (currentChunk.length > 0) {
+                codeBlockChunks.push(currentChunk);
+            }
+            
+            const finalCodeBlocks = [];
+
+            // 3. 各チャンク（Code Block）をカンマ区切りで結合し、メッセージを追加
+            codeBlockChunks.forEach((chunk, index) => {
+                const commands = [...chunk];
+                
+                // 最後のCode Blockにのみ完了メッセージを追加
+                if (index === codeBlockChunks.length - 1) {
+                    commands.push('api.sendMessage(myId,"\\u2705 \\u30C9\\u30C3\\u30C8\\u7D75\\u3092\\u63CF\\u753B\\u3057\\u307E\\u3057\\u305F\\uFF01")');
+                } else {
+                    // 完了メッセージがないCode Blockにも、実行確認のメッセージを追加
+                    commands.push(`api.sendMessage(myId,"\\u2714 Code Block ${index + 1} \\u304C\\u5B9F\\u884C\\u3055\\u308C\\u307E\\u3057\\u305F\\u3002\\u7D9A\\u304D\\u306B\\u6B21\\u306E Block \\u3092\\u5B9F\\u884C\\u3057\\u3066\\u304F\\u3060\\u3055\\u3044\\u3002")`);
+                }
+                
+                // ユーザーの要求どおりカンマ (,) で結合
+                finalCodeBlocks.push(commands.join(','));
+            });
+
+            return finalCodeBlocks;
+        }
+
+        /**
+         * 生成されたコードに基づいてUIを更新し、タブを動的に生成する
+         */
+        function updateOutputUI(codeBlocks) {
+            const tabButtons = document.getElementById('tabButtons');
+            const tabContent = document.getElementById('tabContent');
+            if (!tabButtons || !tabContent) return; 
+
+            // 既存のボタンとコンテンツをクリア
+            tabButtons.innerHTML = ''; 
+            const copyMessage = document.getElementById('copyMessage');
+            if (copyMessage) {
+                tabContent.innerHTML = '';
+                tabContent.appendChild(copyMessage);
+            }
+            
+            codeBlocks.forEach((code, index) => {
+                const blockId = index + 1;
+                const charCount = code.length;
+                const commandCount = code.split(/api\.setBlock/).length - 1; 
+
+                // --- 1. Create Tab Button ---
+                const button = document.createElement('button');
+                button.textContent = `Block ${blockId} (${commandCount}コマンド / ${charCount}文字)`;
+                button.className = `tab-button px-4 py-3 text-sm rounded-t-lg transition duration-150 text-gray-700 hover:bg-gray-100 whitespace-nowrap`;
+                button.setAttribute('data-target', `codeBlock${blockId}`);
+                button.onclick = function() { switchTab(blockId); };
+                tabButtons.appendChild(button);
+
+                // --- 2. Create Tab Pane (Content) ---
+                const pane = document.createElement('div');
+                pane.id = `codeBlock${blockId}`;
+                pane.className = 'tab-pane hidden';
+                pane.setAttribute('data-block-id', blockId);
+
+                const textarea = document.createElement('textarea');
+                textarea.id = `outputCode${blockId}`;
+                textarea.rows = '12';
+                textarea.readOnly = true;
+                // コードエリアをダークテーマに変更
+                textarea.className = 'w-full p-4 border border-gray-700 rounded-lg bg-code-dark text-lime-400 font-mono text-xs custom-scrollbar shadow-inner';
+                textarea.value = code;
+
+                const copyButton = document.createElement('button');
+                copyButton.textContent = `Block ${blockId} のコードをコピー`;
+                copyButton.className = 'copy-btn mt-3 px-6 py-2 bg-bloxd-primary text-white font-semibold rounded-full hover:bg-blue-600 transition duration-300 shadow-md';
+                copyButton.setAttribute('data-target', `outputCode${blockId}`);
+                copyButton.onclick = copyCode; 
+
+                pane.appendChild(textarea);
+                pane.appendChild(copyButton);
+                tabContent.insertBefore(pane, copyMessage); 
+            });
+
+            // Activate the first tab if blocks exist
+            if (codeBlocks.length > 0) {
+                switchTab(1);
+            }
+        }
+        
+        /**
+         * タブの切り替え処理
+         */
+        function switchTab(blockId) {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabPanes = document.querySelectorAll('.tab-pane');
+
+            tabPanes.forEach(pane => {
+                pane.classList.add('hidden');
+            });
+            tabButtons.forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            const targetPane = document.getElementById(`codeBlock${blockId}`);
+            const targetButton = document.querySelector(`.tab-button[data-target="codeBlock${blockId}"]`);
+
+            if (targetPane) {
+                targetPane.classList.remove('hidden');
+            }
+            if (targetButton) {
+                targetButton.classList.add('active');
+            }
+        }
+
+        /* コードをクリップボードにコピー */
+        function copyCode(event) {
+            const targetId = event.currentTarget.getAttribute('data-target');
+            const outputCodeElement = document.getElementById(targetId);
+            
+            if (!outputCodeElement || !outputCodeElement.value || outputCodeElement.value.startsWith('/*')) {
+                showCustomMessage("コピーするコードがありません。先に画像を変換してください。", 'error');
+                return;
+            }
+
+            outputCodeElement.select();
+            try {
+                // document.execCommand('copy') は非推奨ですが、iFrame内で安全に動作するため使用
+                document.execCommand('copy'); 
+                var copyMessage = document.getElementById('copyMessage');
+                if (copyMessage) {
+                    copyMessage.classList.remove('hidden');
+                    // メッセージを少し強調
+                    copyMessage.textContent = `✅ Block ${event.currentTarget.textContent.match(/Block (\d+)/)[1]} のコードをコピーしました！`;
+                    setTimeout(function() { copyMessage.classList.add('hidden'); }, 2000);
+                }
+            } catch (err) {
+                console.error('Copy command failed:', err);
+                showCustomMessage('コピーに失敗しました。手動でテキストエリアからコピーしてください。', 'error');
+            }
+        }
+
+        /* DOMContentLoaded後にイベントリスナーを設定 */
+        document.addEventListener('DOMContentLoaded', function() {
+            var resolutionSelect = document.getElementById('resolution');
+            
+            // 初期設定の実行
             updatePreviewCanvasSize(parseInt(resolutionSelect.value));
 
-            // イベントリスナーをプログラムで設定
-            document.getElementById('convertButton').addEventListener('click', startConversion);
-            document.getElementById('copyButton').addEventListener('click', copyCode);
+            const convertButton = document.getElementById('convertButton');
+            if (convertButton) convertButton.addEventListener('click', startConversion);
             
-            // 解像度変更時にもプレビューを更新
-            resolutionSelect.addEventListener('change', () => {
-                const newSize = parseInt(resolutionSelect.value);
+            resolutionSelect.addEventListener('change', function() {
+                var newSize = parseInt(resolutionSelect.value);
                 updatePreviewCanvasSize(newSize);
-                document.getElementById('previewResolution').textContent = newSize + "x" + newSize;
-                // 解像度変更時はコードとプレビューをリセット（画像処理はまだ実行されていない）
-                document.getElementById('outputSection').style.display = 'none';
-                document.getElementById('outputCode').value = '// 解像度を変更しました。画像を再度アップロードして「変換」を押してください。';
+                
+                const previewResolution = document.getElementById('previewResolution');
+                if(previewResolution) previewResolution.textContent = newSize + "x" + newSize;
+                
+                var resetMessage = '/* Code Blockの座標と解像度を設定し、画像をアップロードして「変換」を押してください。 */';
+
+                const outputSection = document.getElementById('outputSection');
+                if(outputSection) outputSection.style.display = 'none';
+                
+                const tabButtons = document.getElementById('tabButtons');
+                if(tabButtons) tabButtons.innerHTML = '';
+
+                const tabContent = document.getElementById('tabContent');
+                const copyMessage = document.getElementById('copyMessage');
+                if (tabContent) {
+                    tabContent.innerHTML = `
+                        <!-- Code Block のコンテンツはJSで動的に追加されます -->
+                        <textarea id="outputCodePlaceholder" rows="12" readonly class="w-full p-4 border border-gray-700 rounded-lg bg-code-dark text-lime-400 font-mono text-xs custom-scrollbar shadow-inner">${resetMessage}</textarea>
+                    `;
+                    if (copyMessage) tabContent.appendChild(copyMessage);
+                }
             });
+            
+            // 初回表示時のプレースホルダー
+            const tabContent = document.getElementById('tabContent');
+            const resetMessage = '/* Code Blockの座標と解像度を設定し、画像をアップロードして「変換」を押してください。 */';
+            if (tabContent) {
+                tabContent.innerHTML = `
+                    <textarea id="outputCodePlaceholder" rows="12" readonly class="w-full p-4 border border-gray-700 rounded-lg bg-code-dark text-lime-400 font-mono text-xs custom-scrollbar shadow-inner">${resetMessage}</textarea>
+                    <p id="copyMessage" class="mt-3 px-3 py-1 bg-green-100 text-green-700 font-semibold rounded inline-block hidden">✅ コピーしました！</p>
+                `;
+            }
+
         });
 
     </script>
