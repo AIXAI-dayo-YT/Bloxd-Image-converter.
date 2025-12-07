@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bloxd ドット絵コンバーター (World Code対応)</title>
+    <title>Bloxd ドット絵コンバーター V3 (機能強化版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+        // Tailwind Config & Custom Colors
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
-                        'bloxd-primary': '#3b82f6',
-                        'bloxd-secondary': '#10b981',
-                        'bloxd-dark-bg': '#f8fafc',
-                        'bloxd-wool': '#f1f5f9',
+                        'bloxd-primary': '#4f46e5', // Indigo for primary action
+                        'bloxd-secondary': '#10b981', // Emerald for success/highlight
+                        'bloxd-bg': '#f3f4f6', // Light gray background
+                        'bloxd-card': '#ffffff',
+                        'bloxd-wool': '#eef2ff', // Light indigo for input area
                         'code-dark': '#1f2937',
                     }
                 }
@@ -25,77 +27,107 @@
         body { font-family: 'Inter', sans-serif; background-color: #f0f4f8; }
         .custom-scrollbar::-webkit-scrollbar { width: 8px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #64748b; border-radius: 10px; }
-        .image-rendering-pixelated { image-rendering: pixelated; }
-        .tab-button.active { background-color: #10b981; color: white; border-bottom: 3px solid #059669; }
+        .image-rendering-pixelated { 
+            image-rendering: pixelated; 
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        .tab-button.active { 
+            background-color: #10b981; 
+            color: white; 
+            border-bottom: 3px solid #059669; 
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #10b981;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
-<body class="p-4 sm:p-8 bg-bloxd-dark-bg min-h-screen flex justify-center items-start">
+<body class="p-4 sm:p-8 bg-bloxd-bg min-h-screen flex justify-center items-start">
 
-    <div id="app" class="w-full max-w-5xl bg-white shadow-2xl rounded-xl p-6 sm:p-10 my-8">
+    <div id="app" class="w-full max-w-5xl bg-bloxd-card shadow-2xl rounded-2xl p-6 sm:p-10 my-8">
         
+        <!-- Header -->
         <h1 class="text-3xl sm:text-4xl font-extrabold text-bloxd-primary mb-2 text-center border-b pb-3">
-            🧱 Bloxd ドット絵コンバーター <span class="text-sm text-gray-500 font-normal">Ver 2.2 (文字数制限追加)</span>
+            🧱 Bloxd ドット絵コンバーター <span class="text-sm text-gray-500 font-normal">V3.0 (強化版)</span>
         </h1>
         <p class="text-center text-gray-600 mb-8 mt-2">
-            Code Block用（分割）と World Code用（圧縮・最適化）のコードを生成します。
+            画像をBloxdのブロックコード (World Code / Code Block) に変換します。
         </p>
 
-        <div class="space-y-8 p-6 bg-bloxd-wool rounded-xl shadow-inner border border-gray-200">
+        <!-- Step 1: Settings and Upload -->
+        <div class="space-y-8 p-6 bg-bloxd-wool rounded-xl shadow-inner border border-indigo-200">
             <h2 class="text-2xl font-bold text-gray-800 flex items-center">
-                <span class="bg-bloxd-secondary text-white rounded-full w-8 h-8 flex items-center justify-center mr-3 text-lg">1</span>
+                <span class="bg-bloxd-primary text-white rounded-full w-8 h-8 flex items-center justify-center mr-3 text-lg font-mono">1</span>
                 設定とアップロード
             </h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 
-                <div class="col-span-1 space-y-4 p-4 bg-white rounded-lg shadow-md">
+                <!-- Image Upload -->
+                <div class="col-span-1 space-y-4 p-4 bg-white rounded-xl shadow-md border-t-4 border-bloxd-primary/50">
                     <label class="block text-lg font-semibold text-gray-800">画像をアップロード</label>
                     <input type="file" id="imageUpload" accept="image/*" class="w-full text-sm text-gray-600
                         file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0
                         file:text-sm file:font-semibold file:bg-bloxd-primary file:text-white
-                        hover:file:bg-blue-600 cursor-pointer transition duration-150"/>
+                        hover:file:bg-indigo-600 cursor-pointer transition duration-150"/>
                 </div>
 
-                <div class="col-span-1 space-y-4 p-4 bg-white rounded-lg shadow-md">
+                <!-- Size Settings -->
+                <div class="col-span-1 space-y-4 p-4 bg-white rounded-xl shadow-md border-t-4 border-bloxd-primary/50">
                     <label class="block text-lg font-semibold text-gray-800">サイズ設定 (ブロック数)</label>
                     <div class="flex items-center space-x-4">
                         <div class="flex-1">
                             <label class="block text-xs text-gray-500 mb-1">縦 (高さ) <span class="text-red-500">*操作可能</span></label>
-                            <input type="number" id="inputHeight" value="30" min="1" class="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-bloxd-primary outline-none text-center font-bold text-lg">
+                            <input type="number" id="inputHeight" value="30" min="1" max="100" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-bloxd-primary outline-none text-center font-bold text-lg">
                         </div>
                         <span class="text-gray-400 font-bold">×</span>
                         <div class="flex-1">
                             <label class="block text-xs text-gray-500 mb-1">横 (幅) <span class="text-gray-400">*自動計算</span></label>
-                            <input type="number" id="inputWidth" value="-" readonly class="w-full p-2 bg-gray-100 border border-gray-300 rounded text-center text-gray-500 font-bold text-lg cursor-not-allowed">
+                            <input type="text" id="inputWidth" value="-" readonly class="w-full p-2 bg-gray-100 border border-gray-300 rounded-lg text-center text-gray-500 font-bold text-lg cursor-not-allowed">
                         </div>
                     </div>
                     <p id="aspectRatioDisplay" class="text-xs text-right text-bloxd-primary font-medium">比率: -</p>
                 </div>
-
-                <div class="col-span-1 space-y-4 p-4 bg-white rounded-lg shadow-md">
+                
+                <!-- Coordinate Settings -->
+                <div class="col-span-1 space-y-4 p-4 bg-white rounded-xl shadow-md border-t-4 border-bloxd-primary/50">
                     <label class="block text-lg font-semibold text-gray-800">開始座標 (X, Y, Z)</label>
                     <div class="flex space-x-2">
-                        <input type="number" id="startX" value="100" class="w-1/3 p-2 border rounded text-center" placeholder="X">
-                        <input type="number" id="startY" value="60" class="w-1/3 p-2 border rounded text-center" placeholder="Y">
-                        <input type="number" id="startZ" value="200" class="w-1/3 p-2 border rounded text-center" placeholder="Z">
+                        <input type="number" id="startX" value="100" class="w-1/3 p-2 border rounded-lg text-center" placeholder="X">
+                        <input type="number" id="startY" value="60" class="w-1/3 p-2 border rounded-lg text-center" placeholder="Y">
+                        <input type="number" id="startZ" value="200" class="w-1/3 p-2 border rounded-lg text-center" placeholder="Z">
                     </div>
+                    <p class="text-xs text-gray-500">X: 奥行き (固定), Y: 高さ (上下反転), Z: 幅 (左右)</p>
                 </div>
 
-                <div class="col-span-1 space-y-4 p-4 bg-white rounded-lg shadow-md border-2 border-bloxd-secondary/20">
+                <!-- Output Mode -->
+                <div class="col-span-1 space-y-4 p-4 bg-bloxd-card rounded-xl shadow-md border-t-4 border-bloxd-secondary/50">
                     <label class="block text-lg font-semibold text-gray-800">出力モード</label>
                     <div class="space-y-2">
-                        <label class="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
-                            <input type="radio" name="mode" value="codeblock" checked class="w-5 h-5 text-bloxd-secondary focus:ring-bloxd-secondary">
+                        <label class="flex items-start p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition">
+                            <input type="radio" name="mode" value="codeblock" checked class="mt-1 w-5 h-5 text-bloxd-secondary focus:ring-bloxd-secondary">
                             <div class="ml-3">
-                                <span class="block font-bold text-gray-800">Code Block用</span>
-                                <span class="block text-xs text-gray-500">200ブロックごとに分割出力 (api.setBlock使用)</span>
+                                <span class="block font-bold text-gray-800">Code Block用 (単純羅列)</span>
+                                <span class="block text-xs text-gray-500">api.setBlock(...) を200行ごとに分割出力します。**tick関数なし**。</span>
                             </div>
                         </label>
-                        <label class="flex items-center p-2 rounded hover:bg-gray-50 cursor-pointer">
-                            <input type="radio" name="mode" value="worldcode" class="w-5 h-5 text-bloxd-secondary focus:ring-bloxd-secondary">
+                        <label class="flex items-start p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition">
+                            <input type="radio" name="mode" value="worldcode" class="mt-1 w-5 h-5 text-bloxd-primary focus:ring-bloxd-primary">
                             <div class="ml-3">
-                                <span class="block font-bold text-indigo-600">World Code用 (最適化)</span>
-                                <span class="block text-xs text-gray-500">setBlockWallsで圧縮し、16,000文字以内に収めます</span>
+                                <span class="block font-bold text-indigo-600">World Code用 (最適化・分割機能付き)</span>
+                                <span class="block text-xs text-gray-500">`setBlockWalls`で圧縮。**360ブロック以上で自動分割**。16,000文字以内に収めます。</span>
                             </div>
                         </label>
                     </div>
@@ -103,46 +135,67 @@
 
             </div>
             
+            <!-- Convert Button -->
             <div class="pt-4 flex justify-center">
-                <button id="convertButton" class="px-10 py-4 bg-bloxd-secondary text-white text-xl font-bold rounded-full shadow-lg hover:bg-emerald-600 transition duration-300 transform hover:scale-105 disabled:opacity-50">
-                    変換実行
+                <button id="convertButton" class="flex items-center px-10 py-4 bg-bloxd-secondary text-white text-xl font-bold rounded-full shadow-lg hover:bg-emerald-600 transition duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <span id="buttonText">変換実行</span>
+                    <div id="buttonSpinner" class="spinner ml-3 hidden"></div>
                 </button>
             </div>
         </div>
         
-        <div id="errorMessage" class="hidden mt-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg">
-            <p class="font-bold">Error: 文字数が16000文字以上です</p>
-            <p class="text-sm">World Codeの制限を超過しました。サイズ設定（縦のブロック数）を小さくしてください。</p>
+        <!-- Error Message (Max Chars/Max Blocks) -->
+        <div id="errorMessage" class="hidden mt-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded-lg shadow-md">
+            <p class="font-bold mb-1 flex items-center"><svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-.99 1.13l.49 5a.5.5 0 00.98 0l.49-5A1 1 0 0010 5z" clip-rule="evenodd"></path></svg> 変換エラー</p>
+            <p id="errorDetail" class="text-sm">World Codeの文字数制限を超過しました。サイズ設定（縦のブロック数）を小さくしてください。</p>
         </div>
 
 
+        <!-- Step 2: Output -->
         <div id="outputSection" class="mt-10 hidden">
+            <h2 class="text-2xl font-bold text-gray-800 flex items-center mb-5">
+                <span class="bg-bloxd-secondary text-white rounded-full w-8 h-8 flex items-center justify-center mr-3 text-lg font-mono">2</span>
+                結果とコード
+            </h2>
+
             <div class="flex flex-col md:flex-row gap-8">
+                <!-- Preview -->
                 <div class="md:w-1/3">
-                    <h3 class="font-bold text-lg text-gray-700 mb-2">プレビュー</h3>
-                    <div class="p-4 bg-gray-100 rounded-lg shadow-inner flex justify-center">
-                        <canvas id="previewCanvas" class="max-w-full h-auto border-4 border-white shadow-md image-rendering-pixelated"></canvas>
+                    <h3 class="font-bold text-lg text-gray-700 mb-3 border-b pb-1">ドット絵プレビュー</h3>
+                    <div class="p-4 bg-gray-200 rounded-xl shadow-inner flex justify-center items-center h-64 md:h-96">
+                        <canvas id="previewCanvas" class="max-w-full max-h-full border-4 border-white shadow-xl image-rendering-pixelated rounded-lg bg-white"></canvas>
                     </div>
                 </div>
+                <!-- Code Output -->
                 <div class="md:w-2/3">
-                    <h3 class="font-bold text-lg text-gray-700 mb-2 flex justify-between items-end">
+                    <h3 class="font-bold text-lg text-gray-700 mb-3 border-b pb-1 flex justify-between items-end">
                         <span>生成コード</span>
-                        <span id="charCount" class="text-xs font-normal text-gray-500"></span>
+                        <span id="charCount" class="text-sm font-normal text-gray-500"></span>
                     </h3>
                     
-                    <div id="tabContainer" class="hidden mb-0 flex overflow-x-auto border-b-2 border-gray-200"></div>
+                    <div id="tabContainer" class="hidden mb-0 flex flex-wrap gap-1 border-b-2 border-gray-200 pt-2 pb-1"></div>
                     
-                    <textarea id="outputCode" rows="12" readonly class="w-full p-4 border border-gray-300 rounded-b-lg bg-code-dark text-green-400 font-mono text-xs custom-scrollbar"></textarea>
+                    <textarea id="outputCode" rows="12" readonly class="w-full p-4 border border-gray-300 rounded-lg bg-code-dark text-green-400 font-mono text-xs custom-scrollbar shadow-lg"></textarea>
                     
-                    <button id="copyButton" class="mt-3 px-6 py-2 bg-bloxd-primary text-white rounded-lg hover:bg-blue-600 transition w-full font-bold">
+                    <button id="copyButton" class="mt-4 px-6 py-3 bg-bloxd-primary text-white rounded-xl hover:bg-indigo-600 transition w-full font-bold shadow-md">
                         コードをコピー
                     </button>
                 </div>
             </div>
         </div>
 
-        <div id="loading" class="hidden text-center mt-10 text-bloxd-secondary font-bold text-xl">
-            処理中...
+        <!-- Copy Success Modal (Custom alert replacement) -->
+        <div id="copySuccessModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-xl shadow-2xl transform transition-all duration-300 scale-100 max-w-sm w-full text-center border-t-4 border-bloxd-secondary">
+                <svg class="mx-auto h-12 w-12 text-bloxd-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.143-2.052-.424-3.036z"></path></svg>
+                <h3 class="mt-2 text-lg leading-6 font-medium text-gray-900">コピー成功</h3>
+                <p class="mt-1 text-sm text-gray-500">選択中のコードがクリップボードにコピーされました。</p>
+                <div class="mt-4">
+                    <button id="closeModal" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-bloxd-secondary text-base font-medium text-white hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-bloxd-secondary sm:text-sm">
+                        OK
+                    </button>
+                </div>
+            </div>
         </div>
 
     </div>
@@ -151,8 +204,10 @@
         // --- 定数・パレット ---
         const MAX_CHARS_WORLDCODE = 16000; // World Codeの文字数制限
         const MAX_BLOCKS_CODEBLOCK = 200; // Code Block用分割数
-        
+        const MAX_WALL_BLOCKS = 360; // setBlockWallsが一度に処理できる最大ブロック数 (W x H)
+
         // 32色パレット (Concrete + Wool)
+        // NOTE: Block names must match Bloxd.io's internal block names exactly.
         const PALETTE = {
             'White Concrete': [200, 203, 207], 'Light Gray Concrete': [135, 137, 140], 'Gray Concrete': [80, 80, 84], 'Black Concrete': [25, 27, 30],
             'Brown Concrete': [95, 60, 42], 'Red Concrete': [142, 38, 32], 'Orange Concrete': [220, 94, 25], 'Yellow Concrete': [237, 178, 20],
@@ -166,19 +221,39 @@
 
         // World Code圧縮用の短縮名マップ
         const SHORT_NAMES = {};
-        const REVERSE_SHORT_NAMES = {};
         let shortIndex = 0;
         for (let key in PALETTE) {
+            // "B" + 0, 1, 2, ..., 9, A, B, ... Z, 10, ... の形式 (最大32色なので1桁で収まる)
             const short = "B" + (shortIndex++).toString(36).toUpperCase(); 
             SHORT_NAMES[key] = short;
-            REVERSE_SHORT_NAMES[short] = key;
         }
 
         let loadedImg = null;
         let aspectRatio = 0;
-
+        
+        // --- DOM要素取得 ---
+        const imageUpload = document.getElementById('imageUpload');
+        const inputHeight = document.getElementById('inputHeight');
+        const inputWidth = document.getElementById('inputWidth');
+        const convertButton = document.getElementById('convertButton');
+        const aspectRatioDisplay = document.getElementById('aspectRatioDisplay');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorDetail = document.getElementById('errorDetail');
+        const buttonText = document.getElementById('buttonText');
+        const buttonSpinner = document.getElementById('buttonSpinner');
+        const outputSection = document.getElementById('outputSection');
+        const copySuccessModal = document.getElementById('copySuccessModal');
+        const closeModal = document.getElementById('closeModal');
+        
         // --- イベントリスナー ---
-        document.getElementById('imageUpload').addEventListener('change', function(e) {
+        imageUpload.addEventListener('change', handleImageUpload);
+        inputHeight.addEventListener('input', updateWidthFromHeight);
+        convertButton.addEventListener('click', startConversion);
+        closeModal.addEventListener('click', () => copySuccessModal.style.display = 'none');
+        
+        // --- 関数 ---
+
+        function handleImageUpload(e) {
             const file = e.target.files[0];
             if(!file) return;
             const reader = new FileReader();
@@ -188,37 +263,36 @@
                     loadedImg = img;
                     aspectRatio = img.width / img.height;
                     updateWidthFromHeight(); // 画像読み込み時に幅を計算
+                    convertButton.disabled = false; // 画像が読み込まれたらボタンを有効化
+                    convertButton.classList.replace('bg-gray-400', 'bg-bloxd-secondary');
                 }
                 img.src = event.target.result;
             }
             reader.readAsDataURL(file);
-        });
-
-        document.getElementById('inputHeight').addEventListener('input', updateWidthFromHeight);
-        document.getElementById('convertButton').addEventListener('click', startConversion);
-
-        // --- 関数 ---
+        }
 
         function updateWidthFromHeight() {
-            const hInput = document.getElementById('inputHeight');
-            const wInput = document.getElementById('inputWidth');
-            const arDisplay = document.getElementById('aspectRatioDisplay');
-            
             if (!loadedImg) {
-                wInput.value = "-";
-                arDisplay.textContent = "画像をアップロードしてください";
+                inputWidth.value = "-";
+                aspectRatioDisplay.textContent = "画像をアップロードしてください";
+                convertButton.disabled = true;
                 return;
             }
 
-            let h = parseInt(hInput.value);
+            let h = parseInt(inputHeight.value);
             if(isNaN(h) || h < 1) h = 1;
             
+            // 最大値チェック (念のため)
+            if (h > 100) { h = 100; inputHeight.value = 100; }
+
             const w = Math.round(h * aspectRatio);
-            wInput.value = w;
-            arDisplay.textContent = `元のサイズ: ${loadedImg.width}x${loadedImg.height} (比率 ${aspectRatio.toFixed(2)})`;
+            inputWidth.value = w;
+            aspectRatioDisplay.textContent = `元のサイズ: ${loadedImg.width}x${loadedImg.height} (比率 ${aspectRatio.toFixed(2)})`;
+            convertButton.disabled = false;
         }
 
         function getColorDistance(rgb1, rgb2) {
+            // Simple Euclidean distance squared for speed
             return Math.pow(rgb1[0]-rgb2[0],2) + Math.pow(rgb1[1]-rgb2[1],2) + Math.pow(rgb1[2]-rgb2[2],2);
         }
 
@@ -233,18 +307,20 @@
         }
 
         async function startConversion() {
-            if (!loadedImg) return alert("画像をアップロードしてください");
+            if (!loadedImg) { showMessage("画像をアップロードしてください", "Error"); return; }
             
-            // エラーメッセージを非表示にする
-            document.getElementById('errorMessage').classList.add('hidden');
-            document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('outputSection').style.display = 'none';
+            // UI更新開始
+            errorMessage.classList.add('hidden');
+            outputSection.classList.add('hidden');
+            buttonText.textContent = '処理中...';
+            buttonSpinner.classList.remove('hidden');
+            convertButton.disabled = true;
 
             // 少し待ってUI更新させる
             await new Promise(r => setTimeout(r, 50));
 
-            const h = parseInt(document.getElementById('inputHeight').value);
-            const w = parseInt(document.getElementById('inputWidth').value);
+            const h = parseInt(inputHeight.value);
+            const w = parseInt(inputWidth.value);
             const sx = parseInt(document.getElementById('startX').value);
             const sy = parseInt(document.getElementById('startY').value);
             const sz = parseInt(document.getElementById('startZ').value);
@@ -257,32 +333,35 @@
             canvas.height = h;
             
             // プレビュー表示の調整 (CSS)
-            const maxDimension = 400; 
-            const scale = Math.min(maxDimension/w, maxDimension/h);
-            canvas.style.width = (w * Math.max(1, scale)) + "px";
-            canvas.style.height = (h * Math.max(1, scale)) + "px";
+            const maxDimension = 300; // プレビューの最大サイズ
+            const scaleFactor = Math.min(maxDimension/w, maxDimension/h);
+            canvas.style.width = (w * scaleFactor) + "px";
+            canvas.style.height = (h * scaleFactor) + "px";
 
+            // 画像をCanvasに描画し、ピクセルデータを取得
             ctx.drawImage(loadedImg, 0, 0, w, h);
             const imgData = ctx.getImageData(0, 0, w, h).data;
 
-            // ブロックデータ生成 [y][z] = blockName
+            // ブロックデータ生成とプレビュー
             let grid = [];
             for(let y=0; y<h; y++) {
                 grid[y] = [];
                 for(let x=0; x<w; x++) { 
                     const i = (y * w + x) * 4;
-                    // 透過ピクセルはスキップ (Air)
-                    if (imgData[i+3] < 128) {
-                        grid[y][x] = null;
-                        continue;
+                    
+                    let block = null;
+                    if (imgData[i+3] >= 128) { // 透過ピクセルでなければ
+                        block = getNearestBlock(imgData[i], imgData[i+1], imgData[i+2]);
+                        
+                        // プレビュー塗り直し (パレット色で)
+                        const c = PALETTE[block];
+                        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+                        ctx.fillRect(x, y, 1, 1);
+                    } else {
+                        // 透過部分はCanvasの背景色 (白) に任せるか、明示的に透明化
+                        ctx.clearRect(x, y, 1, 1);
                     }
-                    const block = getNearestBlock(imgData[i], imgData[i+1], imgData[i+2]);
                     grid[y][x] = block;
-
-                    // プレビュー塗り直し
-                    const c = PALETTE[block];
-                    ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
-                    ctx.fillRect(x, y, 1, 1);
                 }
             }
 
@@ -292,64 +371,70 @@
             if (mode === 'codeblock') {
                 resultCodes = generateCodeBlock(grid, sx, sy, sz, w, h);
                 setupTabs(resultCodes);
-                document.getElementById('outputSection').style.display = 'block';
             } else {
-                const code = generateWorldCode(grid, sx, sy, sz, w, h);
+                resultCodes = generateWorldCode(grid, sx, sy, sz, w, h);
                 
-                // ★ World Codeの文字数チェックとエラー表示
-                if (code.length > MAX_CHARS_WORLDCODE) {
-                    document.getElementById('loading').classList.add('hidden');
-                    document.getElementById('errorMessage').classList.remove('hidden');
-                    return; // 変換処理をここで中断
+                // World Codeの文字数チェック
+                const totalCode = resultCodes.join(''); // World Codeは1つのコードとして結合
+                if (totalCode.length > MAX_CHARS_WORLDCODE) {
+                    errorDetail.textContent = `World Codeの文字数制限 (最大${MAX_CHARS_WORLDCODE}文字) を超過しました。現在: ${totalCode.length}文字。サイズ設定（縦のブロック数）を小さくしてください。`;
+                    errorMessage.classList.remove('hidden');
+                    // UI更新終了
+                    buttonText.textContent = '変換実行';
+                    buttonSpinner.classList.add('hidden');
+                    convertButton.disabled = false;
+                    return; 
                 }
                 
-                resultCodes = [code];
                 setupTabs(resultCodes, true); // WorldCodeモード
-                document.getElementById('outputSection').style.display = 'block';
             }
 
-            document.getElementById('loading').classList.add('hidden');
+            // UI更新終了
+            buttonText.textContent = '変換実行';
+            buttonSpinner.classList.add('hidden');
+            convertButton.disabled = false;
+            outputSection.classList.remove('hidden');
         }
 
-        // --- Code Block用生成 (単純羅列・分割) ---
+        // --- Code Block用生成 (単純羅列) ---
         function generateCodeBlock(grid, sx, sy, sz, w, h) {
             let blocks = [];
+            // BloxdのY軸はMinecraftと同様に下から上に向かって座標が増える
+            // 画像のY軸は上から下に向かって座標が増えるため、変換が必要 (h - 1 - y)
             for(let y=0; y<h; y++) {
                 for(let x=0; x<w; x++) {
                     if(!grid[y][x]) continue;
-                    blocks.push(`api.setBlock(${sx},${sy + (h - 1 - y)},${sz + x},"${grid[y][x]}")`);
+                    // Y座標を反転させている
+                    blocks.push(`api.setBlock(${sx},${sy + (h - 1 - y)},${sz + x},"${grid[y][x]}");`);
                 }
             }
 
             let chunks = [];
-            let codeBlockTemplate = (content) => `
-// Bloxd Code Block #${chunks.length + 1}
-// ${content.length} blocks
-tick=()=>{
-  [
-    ${content}
-  ].forEach(api.eval); // setBlockをforEachで実行
-}
-`.trim();
-            
+            // コードブロック形式のテンプレートは使わず、単純な羅列のみ
             for (let i = 0; i < blocks.length; i += MAX_BLOCKS_CODEBLOCK) {
                 let chunk = blocks.slice(i, i + MAX_BLOCKS_CODEBLOCK);
-                let blockStrings = chunk.map(cmd => `"${cmd.replace(/"/g, '\\"')}"`);
-                chunks.push(codeBlockTemplate(blockStrings.join(',\n    ')));
+                chunks.push(`// Bloxd Code Block #${chunks.length + 1} (${chunk.length} blocks)\n${chunk.join('\n')}`);
             }
             
             if (chunks.length === 0 && blocks.length > 0) {
-                 chunks.push(codeBlockTemplate(blocks.join(',\n    ')));
+                 chunks.push(`// Bloxd Code Block #1 (${blocks.length} blocks)\n${blocks.join('\n')}`);
+            }
+
+            if (chunks.length === 0) {
+                chunks.push(`// 変換結果: 透過ピクセルのみのため、生成されるブロックはありません。`);
             }
             
             return chunks;
         }
 
 
-        // --- World Code用生成 (Greedy Meshing & setBlockWalls) ---
+        // --- World Code用生成 (Greedy Meshing & setBlockWalls 360ブロック制限付き) ---
         function generateWorldCode(grid, sx, sy, sz, w, h) {
             let commands = [];
             let processed = Array(h).fill().map(() => Array(w).fill(false));
+            
+            // 縦に分割された長方形の集合
+            let rects = []; 
 
             for(let y=0; y<h; y++) {
                 for(let x=0; x<w; x++) {
@@ -357,16 +442,17 @@ tick=()=>{
 
                     let block = grid[y][x];
                     
-                    // 横(Z)に伸ばす
+                    // 1. 横(Z)に伸ばす
                     let width = 1;
                     while(x + width < w && grid[y][x + width] === block && !processed[y][x + width]) {
                         width++;
                     }
 
-                    // 縦(Y)に伸ばす
+                    // 2. 縦(Y)に伸ばす
                     let height = 1;
                     while(y + height < h) {
                         let canExtend = true;
+                        // 拡張する行全体が同じブロックで未処理であることを確認
                         for(let k=0; k<width; k++) {
                             if(grid[y + height][x + k] !== block || processed[y + height][x + k]) {
                                 canExtend = false;
@@ -377,27 +463,44 @@ tick=()=>{
                         height++;
                     }
 
-                    // 処理済みマーク
-                    for(let dy=0; dy<height; dy++) {
-                        for(let dx=0; dx<width; dx++) {
-                            processed[y + dy][x + dx] = true;
-                        }
-                    }
+                    // 3. setBlockWallsの制限(360ブロック)に合わせて縦方向を分割
+                    while (height > 0) {
+                        // 1つのsetBlockWallsで処理できる最大高さ
+                        let max_h = Math.floor(MAX_WALL_BLOCKS / width);
+                        if (max_h < 1) max_h = 1; // 最小でも1行は処理
 
-                    // 座標変換 (Bloxd Y軸は逆転)
-                    let z1 = sz + x;
-                    let z2 = sz + x + width - 1;
-                    let y1 = sy + (h - 1 - y); // 上端
-                    let y2 = sy + (h - 1 - (y + height - 1)); // 下端
-                    
-                    const shortName = SHORT_NAMES[block];
-                    
-                    if (width === 1 && height === 1) {
-                        // setBlock用: [y, z, code]
-                        commands.push(`[${y1},${z1},"${shortName}"]`);
-                    } else {
-                        // setBlockWalls用: [y1, y2, z1, z2, code]
-                        commands.push(`[${y1},${y2},${z1},${z2},"${shortName}"]`);
+                        let current_height = Math.min(height, max_h);
+                        
+                        // World CodeのY座標 (BloxdのY軸は逆転している)
+                        // y_currentは現在の処理対象矩形の画像上での開始Y座標
+                        let y_current = y + (height - current_height);
+                        
+                        // 座標変換: 画像のy=0がBloxdのy=h-1に対応
+                        let z1 = sz + x;
+                        let z2 = sz + x + width - 1;
+                        // Y1 (上端) = sy + (画像の下端 - 画像の現在のY座標)
+                        let y1 = sy + (h - 1 - y_current); 
+                        // Y2 (下端) = sy + (画像の下端 - 画像の現在のY座標 - 縦幅 + 1)
+                        let y2 = sy + (h - 1 - (y_current + current_height - 1));
+
+                        const shortName = SHORT_NAMES[block];
+                        
+                        if (current_height === 1 && width === 1) {
+                            // setBlock用: [y, z, code]
+                            rects.push(`[${y1},${z1},"${shortName}"]`);
+                        } else {
+                            // setBlockWalls用: [y1, y2, z1, z2, code]
+                            rects.push(`[${y1},${y2},${z1},${z2},"${shortName}"]`);
+                        }
+
+                        // 処理済みの行をマーク
+                        for(let dy=0; dy<current_height; dy++) {
+                            for(let dx=0; dx<width; dx++) {
+                                processed[y_current + dy][x + dx] = true;
+                            }
+                        }
+
+                        height -= current_height;
                     }
                 }
             }
@@ -408,44 +511,49 @@ tick=()=>{
             const mapJSON = JSON.stringify(mapObj);
 
             // データ配列
-            const dataStr = `[${commands.join(',')}]`;
+            const dataStr = `[${rects.join(',')}]`;
 
-            // 実行用スクリプト
-            return `
+            // 実行用スクリプト (World Codeは常に1つのコード)
+            const worldCode = `
 /* World Code (Auto Generated) */
+// setBlockWallsの最大ブロック数 (${MAX_WALL_BLOCKS}) を考慮して分割済み
 const D=${dataStr};
 const M=${mapJSON};
 const X=${sx};
 // 負荷分散のためtickで少しずつ処理
 let idx=0;
 tick=()=>{
-  let c=0;
-  while(idx<D.length && c<50){ // 1tick 50コマンド制限
-    let d=D[idx++];
-    
-    // 配列の長さでブロックコードの位置を判定
-    let blockCode = d.length === 3 ? d[2] : d[4]; 
-    let n = M[blockCode]; // 名前取得
-    
-    if(!n) {
-      api.sendMessage(api.getPlayerIds()[0], "❌ Error: Unknown Block Code: " + blockCode);
-      continue; 
-    }
+    let c=0;
+    while(idx<D.length && c<50){ // 1tick 50コマンド制限
+        let d=D[idx++];
+        
+        // 配列の長さでブロックコードの位置を判定
+        let blockCode = d.length === 3 ? d[2] : d[4]; 
+        let n = M[blockCode]; // 名前取得
+        
+        if(!n) {
+            api.sendMessage(api.getPlayerIds()[0], "❌ Error: Unknown Block Code: " + blockCode);
+            continue; 
+        }
 
-    if(d.length===3) {
-      // setBlock(X, Y, Z, name)
-      api.setBlock(X,d[0],d[1],n);
-    } else {
-      // setBlockWalls([x1, y1, z1], [x2, y2, z2], blockName, solid, wall)
-      // d = [y1, y2, z1, z2, code]
-      api.setBlockWalls([X,d[0],d[2]],[X,d[1],d[3]],n,true,true);
+        if(d.length===3) {
+            // setBlock(X, Y, Z, name)
+            api.setBlock(X,d[0],d[1],n);
+        } else {
+            // setBlockWalls([x1, y1, z1], [x2, y2, z2], blockName, solid, wall)
+            // d = [y1, y2, z1, z2, code]
+            // X座標は固定、YはBloxd Y軸 (上から下へ増)、Zは幅
+            api.setBlockWalls([X,d[1],d[2]],[X,d[0],d[3]],n,true,true);
+        }
+        c++;
     }
-    c++;
-  }
-  if(idx===D.length){api.sendMessage(api.getPlayerIds()[0], "✅ 描画完了"); idx++;}
+    if(idx===D.length){api.sendMessage(api.getPlayerIds()[0], "✅ 描画完了"); idx++;}
 }
 `.trim();
+            // World Codeは1つのコードとして返す
+            return [worldCode];
         }
+
 
         // --- UI操作 ---
         let currentCodes = [];
@@ -455,57 +563,128 @@ tick=()=>{
             const tabContainer = document.getElementById('tabContainer');
             const textArea = document.getElementById('outputCode');
             const charCount = document.getElementById('charCount');
-            const copyButton = document.getElementById('copyButton');
 
             tabContainer.innerHTML = "";
             
             if (isWorldCode) {
+                // World Code (常に1つのコード)
                 tabContainer.classList.add('hidden');
                 let code = codes[0] || "";
                 textArea.value = code;
                 charCount.innerText = `文字数: ${code.length} / ${MAX_CHARS_WORLDCODE} (推奨)`;
                 copyButton.onclick = () => copyText(code);
             } else {
-                // Code Block用の場合
+                // Code Block用
                 tabContainer.classList.remove('hidden');
-                
-                let initialCode = codes[0] || "";
                 
                 codes.forEach((code, i) => {
                     const btn = document.createElement('button');
-                    btn.className = `px-4 py-2 border-b-2 font-bold text-sm transition-colors ${i===0 ? 'border-bloxd-secondary text-bloxd-secondary' : 'border-transparent text-gray-500 hover:text-gray-700'}`;
+                    btn.className = `px-4 py-2 text-sm transition-colors rounded-t-lg font-bold border-b-2 ${i===0 ? 'border-bloxd-secondary text-bloxd-secondary bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`;
                     btn.innerText = `Block ${i+1}`;
-                    btn.onclick = () => {
+                    btn.setAttribute('data-index', i);
+                    
+                    btn.onclick = (e) => {
+                        const index = parseInt(e.target.getAttribute('data-index'));
                         Array.from(tabContainer.children).forEach(b => {
-                            b.className = b.className.replace('border-bloxd-secondary text-bloxd-secondary', 'border-transparent text-gray-500');
+                            b.classList.remove('border-bloxd-secondary', 'text-bloxd-secondary', 'bg-white');
+                            b.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
                         });
-                        btn.className = btn.className.replace('border-transparent text-gray-500', 'border-bloxd-secondary text-bloxd-secondary');
-                        textArea.value = code;
-                        charCount.innerText = `文字数: ${code.length}`;
-                        copyButton.onclick = () => copyText(code);
+                        e.target.classList.add('border-bloxd-secondary', 'text-bloxd-secondary', 'bg-white');
+                        e.target.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
+
+                        textArea.value = currentCodes[index];
+                        charCount.innerText = `文字数: ${currentCodes[index].length}`;
+                        copyButton.onclick = () => copyText(currentCodes[index]);
                     };
                     tabContainer.appendChild(btn);
                 });
                 
                 // 初期表示
+                const initialCode = codes[0] || "";
                 textArea.value = initialCode;
                 charCount.innerText = `文字数: ${initialCode.length}`;
-                copyButton.onclick = () => copyText(initialCode); 
+                copyButton.onclick = () => copyText(initialCode);
+                if (codes.length > 0) {
+                    // 最初のタブをアクティブにする
+                    tabContainer.querySelector('button').classList.add('border-bloxd-secondary', 'text-bloxd-secondary', 'bg-white');
+                    tabContainer.querySelector('button').classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
+                }
             }
         }
 
+        // カスタムメッセージ表示（alertの代わり）
+        function showMessage(text, type) {
+            const tempDiv = document.createElement('div');
+            tempDiv.className = `fixed bottom-5 right-5 p-4 rounded-xl shadow-lg text-white font-bold transition-opacity duration-300 z-50`;
+            
+            if (type === 'Success') {
+                tempDiv.classList.add('bg-bloxd-secondary');
+            } else if (type === 'Error') {
+                tempDiv.classList.add('bg-red-500');
+            } else {
+                 tempDiv.classList.add('bg-gray-700');
+            }
+            tempDiv.innerText = text;
+
+            document.body.appendChild(tempDiv);
+            
+            // 3秒後にフェードアウト
+            setTimeout(() => {
+                tempDiv.style.opacity = '0';
+                setTimeout(() => tempDiv.remove(), 300);
+            }, 3000);
+        }
+
+        /**
+         * エラー回避のため、document.execCommand('copy') を使用してテキストをクリップボードにコピーします。
+         * @param {string} text - コピーするテキスト
+         */
         function copyText(text) {
             if (!text) {
-                alert("コピーするコードがありません。");
+                showMessage("コピーするコードがありません。", "Error");
                 return;
             }
-            navigator.clipboard.writeText(text).then(() => {
-                alert("コピーしました！");
-            }).catch(err => {
+            
+            // 一時的な <textarea> 要素を作成
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = text;
+            
+            // 画面外に配置してユーザーに見えないようにする
+            tempTextArea.style.position = 'fixed';
+            tempTextArea.style.top = '0';
+            tempTextArea.style.left = '-9999px';
+            
+            document.body.appendChild(tempTextArea);
+            
+            // <textarea>内のテキストを選択
+            tempTextArea.select();
+            
+            let success = false;
+            try {
+                // コピーコマンドを実行 (iframe環境で最も信頼性の高い方法)
+                success = document.execCommand('copy');
+                if (success) {
+                    copySuccessModal.style.display = 'flex'; // 成功モーダルを表示
+                } else {
+                    throw new Error("execCommand('copy')が失敗しました。");
+                }
+            } catch (err) {
+                // 実行に失敗した場合
                 console.error('コピー失敗:', err);
-                alert("コピーに失敗しました。テキストエリアから手動でコピーしてください。");
-            });
+                showMessage("コピーに失敗しました。テキストエリアから手動でコピーしてください。", "Error");
+            } finally {
+                // 一時要素を削除
+                document.body.removeChild(tempTextArea);
+            }
         }
+        
+        // 初期状態のボタン無効化
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!loadedImg) {
+                convertButton.disabled = true;
+                convertButton.classList.add('bg-gray-400');
+            }
+        });
 
     </script>
 </body>
