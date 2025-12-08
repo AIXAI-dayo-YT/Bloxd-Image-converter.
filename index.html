@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bloxd ドット絵コンバーター V3 (機能強化版)</title>
+    <title>Bloxd ドット絵コンバーター V3 (圧縮・分割強化版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         // Tailwind Config & Custom Colors
@@ -119,14 +119,14 @@
                         <label class="flex items-start p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition">
                             <input type="radio" name="mode" value="codeblock" checked class="mt-1 w-5 h-5 text-bloxd-secondary focus:ring-bloxd-secondary">
                             <div class="ml-3">
-                                <span class="block font-bold text-gray-800">Code Block用 (短縮・分割機能付き)</span>
-                                <span class="block text-xs text-gray-500">`for`ループで短縮。**600ブロックごとに自動分割**します。</span>
+                                <span class="block font-bold text-gray-800">Code Block用 (Z軸圧縮・分割)</span>
+                                <span class="block text-xs text-gray-500">`for`ループで圧縮し、**600ブロック/16,000文字**で自動分割します。</span>
                             </div>
                         </label>
                         <label class="flex items-start p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition">
                             <input type="radio" name="mode" value="worldcode" class="mt-1 w-5 h-5 text-bloxd-primary focus:ring-bloxd-primary">
                             <div class="ml-3">
-                                <span class="block font-bold text-indigo-600">World Code用 (最適化・分割機能付き)</span>
+                                <span class="block font-bold text-indigo-600">World Code用 (setBlockWalls最適化)</span>
                                 <span class="block text-xs text-gray-500">`setBlockWalls`で圧縮。**360ブロック以上で自動分割**。16,000文字以内に収めます。</span>
                             </div>
                         </label>
@@ -202,12 +202,11 @@
 
     <script>
         // --- 定数・パレット ---
-        const MAX_CHARS_WORLDCODE = 16000; // World Codeの文字数制限
-        const MAX_BLOCKS_CODEBLOCK = 600; // Code Block用分割数 (ユーザー指定: 600ブロック/Code Block)
-        const MAX_WALL_BLOCKS = 360; // setBlockWallsが一度に処理できる最大ブロック数 (W x H)
+        const MAX_CHARS_PER_CHUNK = 16000; // Code Block & World Codeの文字数制限
+        const MAX_BLOCKS_PER_CHUNK = 600; // Code Blockのブロック数制限 (要望に合わせて200から600に変更)
+        const MAX_WALL_BLOCKS = 360; // setBlockWallsが一度に処理できる最大ブロック数
 
         // 32色パレット (Concrete + Wool)
-        // NOTE: Block names must match Bloxd.io's internal block names exactly.
         const PALETTE = {
             'White Concrete': [200, 203, 207], 'Light Gray Concrete': [135, 137, 140], 'Gray Concrete': [80, 80, 84], 'Black Concrete': [25, 27, 30],
             'Brown Concrete': [95, 60, 42], 'Red Concrete': [142, 38, 32], 'Orange Concrete': [220, 94, 25], 'Yellow Concrete': [237, 178, 20],
@@ -219,11 +218,10 @@
             'Blue Wool': [70, 70, 190], 'Purple Wool': [150, 70, 200], 'Magenta Wool': [210, 90, 170], 'Pink Wool': [240, 150, 170]
         };
 
-        // World Code/Code Block圧縮用の短縮名マップ
+        // World Code圧縮用の短縮名マップ
         const SHORT_NAMES = {};
         let shortIndex = 0;
         for (let key in PALETTE) {
-            // "B" + 0, 1, 2, ..., 9, A, B, ... Z, 10, ... の形式 (最大32色なので1桁で収まる)
             const short = "B" + (shortIndex++).toString(36).toUpperCase(); 
             SHORT_NAMES[key] = short;
         }
@@ -369,17 +367,15 @@
             let resultCodes = [];
             
             if (mode === 'codeblock') {
-                // Code Block: forループによる短縮と600ブロック分割
                 resultCodes = generateCodeBlock(grid, sx, sy, sz, w, h);
                 setupTabs(resultCodes);
             } else {
-                // World Code: setBlockWallsによる圧縮と文字数制限チェック
                 resultCodes = generateWorldCode(grid, sx, sy, sz, w, h);
                 
-                // World Codeの文字数チェック (World Codeは1つのコードとして結合)
-                const totalCode = resultCodes[0] || ""; 
-                if (totalCode.length > MAX_CHARS_WORLDCODE) {
-                    errorDetail.textContent = `World Codeの文字数制限 (最大${MAX_CHARS_WORLDCODE}文字) を超過しました。現在: ${totalCode.length}文字。サイズ設定（縦のブロック数）を小さくしてください。`;
+                // World Codeの文字数チェック (Code BlockはgenerateCodeBlock内で文字数制限を処理)
+                const totalCode = resultCodes.join(''); 
+                if (totalCode.length > MAX_CHARS_PER_CHUNK) {
+                    errorDetail.textContent = `World Codeの文字数制限 (最大${MAX_CHARS_PER_CHUNK}文字) を超過しました。現在: ${totalCode.length}文字。サイズ設定（縦のブロック数）を小さくしてください。`;
                     errorMessage.classList.remove('hidden');
                     // UI更新終了
                     buttonText.textContent = '変換実行';
@@ -398,105 +394,135 @@
             outputSection.classList.remove('hidden');
         }
 
-        // --- Code Block用生成 (forループ短縮 & 600ブロック分割) ---
+        // --- Code Block用生成 (Z軸圧縮とチャンク分割) ---
         function generateCodeBlock(grid, sx, sy, sz, w, h) {
-            let commands = [];
-            let totalBlocksInCurrentChunk = 0;
-            let chunkedCommands = [];
-            
-            // Code block per 600 actual blocks
-            const MAX_BLOCKS_PER_CODEBLOCK = MAX_BLOCKS_CODEBLOCK; 
+            let compressedCommands = [];
+            let totalBlocks = 0;
 
-            for (let y = 0; y < h; y++) {
-                let currentX = 0; // Z軸方向のオフセット
+            // 1. Z軸(横)方向で連続する同じブロックを圧縮
+            // BloxdのY軸はMinecraftと同様に下から上に向かって座標が増える
+            // 画像のY軸は上から下に向かって座標が増えるため、変換が必要 (h - 1 - y)
+            for(let y=0; y<h; y++) {
+                let currentBlock = null;
+                let runStart = -1; // 画像のX座標 (0 to w-1)
                 
-                // 画像のY座標をBloxdのY座標に変換 (Y軸反転)
-                const yCoord = sy + (h - 1 - y);
+                // 行の最後までループし、行末での処理を確実に行うためにx <= wとする
+                for(let x=0; x<=w; x++) { 
+                    // x == w のとき、ブロックは null となり、前のランの処理が行われる
+                    const block = (x < w) ? grid[y][x] : null; 
 
-                while (currentX < w) {
-                    if (!grid[y][currentX]) {
-                        currentX++;
+                    if (block && block === currentBlock) {
+                        // ランが継続
                         continue;
                     }
 
-                    const block = grid[y][currentX];
-                    const startZOffset = currentX;
-                    let runLength = 1;
+                    // --- 前のランの終了 or 透過/新しいブロックに遭遇 ---
+                    if (currentBlock) {
+                        const runEnd = x - 1;
+                        const runLength = runEnd - runStart + 1;
+                        const bloxdY = sy + (h - 1 - y); // Bloxd Y座標 (一定)
+                        const bloxdZStart = sz + runStart;
+                        const bloxdZEnd = sz + runEnd;
+                        
+                        totalBlocks += runLength;
 
-                    // Z軸方向に連続する同じブロックを探索 (Greedy approach)
-                    while (currentX + runLength < w && grid[y][currentX + runLength] === block) {
-                        runLength++;
+                        let command;
+                        if (runLength === 1) {
+                            // 単一ブロック
+                            command = `api.setBlock(${sx},${bloxdY},${bloxdZStart},"${currentBlock}");`;
+                        } else {
+                            // for ループ圧縮
+                            // SyntaxError: Unexpected end of input を避けるため、1行で完結させる
+                            command = `for(let z=${bloxdZStart};z<=${bloxdZEnd};z++)api.setBlock(${sx},${bloxdY},z,"${currentBlock}");`;
+                        }
+                        compressedCommands.push(command);
                     }
 
-                    // --- コマンド生成 ---
-                    const startZ = sz + startZOffset;
-                    const endZ = sz + startZOffset + runLength - 1;
-                    const shortName = SHORT_NAMES[block]; // 圧縮名を使用
-                    let command;
-                    let blocksCount = runLength;
-
-                    // BloxdのCode Blockでは、api.setBlockのブロック名は文字列で指定する必要があるため、
-                    // 短縮名(M["B0"])を使用して文字数を節約します。
-                    if (runLength === 1) {
-                        // 1ブロックのみ: api.setBlock(X, Y, Z, M["B0"]);
-                        command = `api.setBlock(${sx},${yCoord},${startZ},M["${shortName}"]);`;
+                    // --- 新しいランの開始 (x < w の場合のみ) ---
+                    if (block) {
+                        currentBlock = block;
+                        runStart = x;
                     } else {
-                        // 2ブロック以上: for(let z=Z1;z<=Z2;z++)api.setBlock(X, Y, z, M["B0"]);
-                        command = `for(let z=${startZ};z<=${endZ};z++)api.setBlock(${sx},${yCoord},z,M["${shortName}"]);`;
+                        // スペース/透過ブロック
+                        currentBlock = null;
+                        runStart = -1;
                     }
-                    
-                    // --- チャンク分割ロジック ---
-                    if (totalBlocksInCurrentChunk + blocksCount > MAX_BLOCKS_PER_CODEBLOCK) {
-                        // 600ブロックを超過する場合、新しいチャンクを開始
-                        chunkedCommands.push(commands);
-                        commands = [];
-                        totalBlocksInCurrentChunk = 0;
-                    }
-
-                    commands.push(command);
-                    totalBlocksInCurrentChunk += blocksCount;
-                    currentX += runLength;
                 }
             }
 
-            // 最後のチャンクを追加
-            if (commands.length > 0) { 
-                chunkedCommands.push(commands);
-            }
-            
-            // ブロック名マップの定義 (全コードブロックの先頭に追加)
-            let mapObj = {};
-            for(let k in SHORT_NAMES) mapObj[SHORT_NAMES[k]] = k;
-            // Bloxd Code Blockは /* comment */ のみサポート。JSON.stringifyの二重引用符をシングル引用符に置換。
-            const mapScript = `/* Block Name Map */\nconst M = ${JSON.stringify(mapObj).replace(/"/g, "'")};`; 
-            
-            // 最終的なコード配列に整形
-            let finalCodes = [];
-            
-            if (chunkedCommands.length === 0) {
-                 return [`/* 変換結果: 透過ピクセルのみのため、生成されるブロックはありません。 */`];
-            }
-            
-            chunkedCommands.forEach((chunk, i) => {
-                let header = `/* Code Block #${i + 1} (Max ${MAX_BLOCKS_PER_CODEBLOCK} blocks) */\n`;
-                if (i === 0) {
-                     // 最初のチャンクにのみマップ定義を追加
-                     header = mapScript + "\n" + header; 
+            // 2. 圧縮されたコマンドリストをチャンクに分割 (600ブロック/16000文字の制限)
+            let chunks = [];
+            let currentChunkCommands = [];
+            let currentChunkBlockCount = 0;
+            let currentChunkCharCount = 0;
+
+            for (let i = 0; i < compressedCommands.length; i++) {
+                const command = compressedCommands[i];
+                
+                // このコマンドによって設置されるブロック数を推定
+                let blockEstimate = 1;
+                // forループの場合、Zの範囲を抽出してブロック数を計算
+                if (command.startsWith('for')) {
+                    const match = command.match(/z=([\d-]+);z<=([\d-]+)/);
+                    if (match && match.length === 3) {
+                        const zStart = parseInt(match[1]);
+                        const zEnd = parseInt(match[2]);
+                        blockEstimate = zEnd - zStart + 1;
+                    }
                 }
                 
-                // コマンド実行部分
-                finalCodes.push(`${header}${chunk.join('\n')}`);
-            });
+                const charLength = command.length + 1; // +1 は改行文字 '\n' のため
+
+                // チャンク分割が必要かチェック
+                if (currentChunkCommands.length > 0 && 
+                    (currentChunkBlockCount + blockEstimate > MAX_BLOCKS_PER_CHUNK || currentChunkCharCount + charLength > MAX_CHARS_PER_CHUNK)) {
+                    
+                    // 現在のチャンクを確定
+                    chunks.push(currentChunkCommands.join('\n'));
+                    
+                    // 新しいチャンクを開始
+                    currentChunkCommands = [];
+                    currentChunkBlockCount = 0;
+                    currentChunkCharCount = 0;
+                }
+
+                currentChunkCommands.push(command);
+                currentChunkBlockCount += blockEstimate;
+                currentChunkCharCount += charLength;
+            }
+
+            // 最後のチャンクをプッシュ
+            if (currentChunkCommands.length > 0) {
+                chunks.push(currentChunkCommands.join('\n'));
+            }
+
+            // 3. チャンクにコメントを追加
+            let finalChunks = [];
+            if (chunks.length > 0) {
+                chunks.forEach((chunk, i) => {
+                    finalChunks.push(`/* Bloxd Code Block #${i + 1} */\n${chunk}`);
+                });
+            } else if (totalBlocks > 0) {
+                 // チャンクが一つしかないが、ブロックが存在する場合
+                 finalChunks.push(`/* Bloxd Code Block #1 */\n${compressedCommands.join('\n')}`);
+            }
             
-            return finalCodes;
+            if (finalChunks.length === 0) {
+                finalChunks.push(`/* 変換結果: 透過ピクセルのみのため、生成されるブロックはありません。 */`);
+            }
+            
+            return finalChunks;
         }
 
 
         // --- World Code用生成 (Greedy Meshing & setBlockWalls 360ブロック制限付き) ---
         function generateWorldCode(grid, sx, sy, sz, w, h) {
-            let rects = [];
+            let commands = [];
             let processed = Array(h).fill().map(() => Array(w).fill(false));
             
+            // 縦に分割された長方形の集合
+            let rects = []; 
+
             for(let y=0; y<h; y++) {
                 for(let x=0; x<w; x++) {
                     if(!grid[y][x] || processed[y][x]) continue;
@@ -509,7 +535,7 @@
                         width++;
                     }
 
-                    // 2. 縦(Y)に伸ばす (BloxdのY軸で)
+                    // 2. 縦(Y)に伸ばす
                     let height = 1;
                     while(y + height < h) {
                         let canExtend = true;
@@ -574,7 +600,6 @@
             const dataStr = `[${rects.join(',')}]`;
 
             // 実行用スクリプト (World Codeは常に1つのコード)
-            // World Codeはapi.setBlockWallsの制限回避のためtick関数で分割処理する
             const worldCode = `
 /* World Code (Auto Generated) */
 // setBlockWallsの最大ブロック数 (${MAX_WALL_BLOCKS}) を考慮して分割済み
@@ -590,8 +615,7 @@ tick=()=>{
         
         // 配列の長さでブロックコードの位置を判定
         let blockCode = d.length === 3 ? d[2] : d[4]; 
-        // 短縮名のM["B0"]から名前を取得
-        let n = M[blockCode]; 
+        let n = M[blockCode]; // 名前取得
         
         if(!n) {
             api.sendMessage(api.getPlayerIds()[0], "❌ Error: Unknown Block Code: " + blockCode);
@@ -604,7 +628,7 @@ tick=()=>{
         } else {
             // setBlockWalls([x1, y1, z1], [x2, y2, z2], blockName, solid, wall)
             // d = [y1, y2, z1, z2, code]
-            // X座標は固定、YはBloxd Y軸 (上から下へ増), Zは幅
+            // X座標は固定、YはBloxd Y軸 (上から下へ増)、Zは幅
             api.setBlockWalls([X,d[1],d[2]],[X,d[0],d[3]],n,true,true);
         }
         c++;
@@ -633,7 +657,7 @@ tick=()=>{
                 tabContainer.classList.add('hidden');
                 let code = codes[0] || "";
                 textArea.value = code;
-                charCount.innerText = `文字数: ${code.length} / ${MAX_CHARS_WORLDCODE} (推奨)`;
+                charCount.innerText = `文字数: ${code.length} / ${MAX_CHARS_PER_CHUNK} (推奨)`;
                 copyButton.onclick = () => copyText(code);
             } else {
                 // Code Block用
@@ -641,8 +665,11 @@ tick=()=>{
                 
                 codes.forEach((code, i) => {
                     const btn = document.createElement('button');
+                    // チャンクごとの文字数はここで計算できないため、コメントに記載された文字数を表示
+                    const match = code.match(/\/\* Bloxd Code Block #\d+ \*\//);
+                    const label = `Block ${i+1}`; 
                     btn.className = `px-4 py-2 text-sm transition-colors rounded-t-lg font-bold border-b-2 ${i===0 ? 'border-bloxd-secondary text-bloxd-secondary bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`;
-                    btn.innerText = `Block ${i+1}`;
+                    btn.innerText = label;
                     btn.setAttribute('data-index', i);
                     
                     btn.onclick = (e) => {
@@ -655,7 +682,7 @@ tick=()=>{
                         e.target.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
 
                         textArea.value = currentCodes[index];
-                        charCount.innerText = `文字数: ${currentCodes[index].length}`;
+                        charCount.innerText = `文字数: ${currentCodes[index].length} / ${MAX_CHARS_PER_CHUNK} (分割基準)`;
                         copyButton.onclick = () => copyText(currentCodes[index]);
                     };
                     tabContainer.appendChild(btn);
@@ -664,7 +691,7 @@ tick=()=>{
                 // 初期表示
                 const initialCode = codes[0] || "";
                 textArea.value = initialCode;
-                charCount.innerText = `文字数: ${initialCode.length}`;
+                charCount.innerText = `文字数: ${initialCode.length} / ${MAX_CHARS_PER_CHUNK} (分割基準)`;
                 copyButton.onclick = () => copyText(initialCode);
                 if (codes.length > 0) {
                     // 最初のタブをアクティブにする
