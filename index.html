@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bloxd ドット絵コンバーター V3 (機能強化版)</title>
+    <title>Bloxd ドット絵コンバーター V4 (短縮出力)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         // Tailwind Config & Custom Colors
@@ -60,7 +60,7 @@
         
         <!-- Header -->
         <h1 class="text-3xl sm:text-4xl font-extrabold text-bloxd-primary mb-2 text-center border-b pb-3">
-            🧱 Bloxd ドット絵コンバーター <span class="text-sm text-gray-500 font-normal">V3.0 (強化版)</span>
+            🧱 Bloxd ドット絵コンバーター <span class="text-sm text-gray-500 font-normal">V4.0 (短縮出力)</span>
         </h1>
         <p class="text-center text-gray-600 mb-8 mt-2">
             画像をBloxdのブロックコード (World Code / Code Block) に変換します。
@@ -119,15 +119,15 @@
                         <label class="flex items-start p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition">
                             <input type="radio" name="mode" value="codeblock" checked class="mt-1 w-5 h-5 text-bloxd-secondary focus:ring-bloxd-secondary">
                             <div class="ml-3">
-                                <span class="block font-bold text-gray-800">Code Block用 (単純羅列)</span>
-                                <span class="block text-xs text-gray-500">api.setBlock(...) を200行ごとに分割出力します。**tick関数なし**。</span>
+                                <span class="block font-bold text-gray-800">Code Block用 (Z軸 forループで短縮)</span>
+                                <span class="block text-xs text-gray-500">連続するブロックを`for`ループで圧縮します。**700ブロック**を目安に自動分割。</span>
                             </div>
                         </label>
                         <label class="flex items-start p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition">
                             <input type="radio" name="mode" value="worldcode" class="mt-1 w-5 h-5 text-bloxd-primary focus:ring-bloxd-primary">
                             <div class="ml-3">
-                                <span class="block font-bold text-indigo-600">World Code用 (最適化・分割機能付き)</span>
-                                <span class="block text-xs text-gray-500">`setBlockWalls`で圧縮。**360ブロック以上で自動分割**。16,000文字以内に収めます。</span>
+                                <span class="block font-bold text-indigo-600">World Code用 (setBlockWallsで最適化)</span>
+                                <span class="block text-xs text-gray-500">`setBlockWalls`で圧縮。**16,000文字以内**に収めます。</span>
                             </div>
                         </label>
                     </div>
@@ -203,8 +203,8 @@
     <script>
         // --- 定数・パレット ---
         const MAX_CHARS_WORLDCODE = 16000; // World Codeの文字数制限
-        const MAX_BLOCKS_CODEBLOCK = 200; // Code Block用分割数
         const MAX_WALL_BLOCKS = 360; // setBlockWallsが一度に処理できる最大ブロック数 (W x H)
+        const CODEBLOCK_MAX_BLOCK_COUNT = 700; // Code Block用：短縮前のブロック数での分割上限（ユーザー要望）
 
         // 32色パレット (Concrete + Wool)
         // NOTE: Block names must match Bloxd.io's internal block names exactly.
@@ -396,32 +396,89 @@
             outputSection.classList.remove('hidden');
         }
 
-        // --- Code Block用生成 (単純羅列) ---
+        // --- Code Block用生成 (Z軸forループ短縮 & 700ブロックで分割) ---
         function generateCodeBlock(grid, sx, sy, sz, w, h) {
-            let blocks = [];
-            // BloxdのY軸はMinecraftと同様に下から上に向かって座標が増える
-            // 画像のY軸は上から下に向かって座標が増えるため、変換が必要 (h - 1 - y)
+            let blockGroups = [];
+            let totalBlocks = 0;
+
+            // 1. Z軸方向（画像ではX軸方向）の連続するブロックをグループ化 (Run-Length Encoding)
             for(let y=0; y<h; y++) {
-                for(let x=0; x<w; x++) {
-                    if(!grid[y][x]) continue;
-                    // Y座標を反転させている
-                    blocks.push(`api.setBlock(${sx},${sy + (h - 1 - y)},${sz + x},"${grid[y][x]}");`);
+                // BloxdのY座標: 画像のy=0が一番上(sy + h - 1)になるように反転させる
+                const bloxdY = sy + (h - 1 - y);
+                
+                let x = 0;
+                while(x < w) {
+                    if (grid[y][x]) {
+                        const block = grid[y][x];
+                        let zStart = sz + x;
+                        let runLength = 1;
+                        
+                        // 同じブロックタイプがZ軸方向（画像ではX軸方向）に連続しているかチェック
+                        while (x + runLength < w && grid[y][x + runLength] === block) {
+                            runLength++;
+                        }
+                        
+                        let zEnd = sz + x + runLength - 1;
+                        
+                        // 連続したブロック群をグループとして追加
+                        blockGroups.push({
+                            x: sx,
+                            y: bloxdY,
+                            zStart: zStart,
+                            zEnd: zEnd,
+                            block: block,
+                            count: runLength // 短縮前のブロック数
+                        });
+                        totalBlocks += runLength;
+                        
+                        // 次のチェック位置へ
+                        x += runLength;
+                    } else {
+                        // 透過セル
+                        x++;
+                    }
                 }
             }
 
+            // 2. ブロックグループをコマンド文字列に変換し、短縮前のブロック数で分割する
+            let totalBlocksInCurrentChunk = 0;
             let chunks = [];
-            // コードブロック形式のテンプレートは使わず、単純な羅列のみ
-            for (let i = 0; i < blocks.length; i += MAX_BLOCKS_CODEBLOCK) {
-                let chunk = blocks.slice(i, i + MAX_BLOCKS_CODEBLOCK);
-                chunks.push(`// Bloxd Code Block #${chunks.length + 1} (${chunk.length} blocks)\n${chunk.join('\n')}`);
-            }
-            
-            if (chunks.length === 0 && blocks.length > 0) {
-                 chunks.push(`// Bloxd Code Block #1 (${blocks.length} blocks)\n${blocks.join('\n')}`);
+            let currentChunkCommands = [];
+
+            blockGroups.forEach(group => {
+                let command;
+                if (group.count === 1) {
+                    // 1ブロックのみ: api.setBlock(X, Y, Z, name);
+                    command = `api.setBlock(${group.x},${group.y},${group.zStart},"${group.block}");`;
+                } else {
+                    // 2ブロック以上: for(let z=Z_start;z<=Z_end;z++)api.setBlock(X,Y,z,"name");
+                    // 可読性よりも短縮形式を優先
+                    command = `for(let z=${group.zStart};z<=${group.zEnd};z++)api.setBlock(${group.x},${group.y},z,"${group.block}");`;
+                }
+
+                // 短縮前のブロック数で分割チェック (700ブロック制限)
+                if (totalBlocksInCurrentChunk + group.count > CODEBLOCK_MAX_BLOCK_COUNT && currentChunkCommands.length > 0) {
+                    // 新しいチャンクを開始
+                    // Code Blockのコメントはシンプルに (SyntaxError回避のため)
+                    chunks.push(`// Block Count: ${totalBlocksInCurrentChunk}\n${currentChunkCommands.join('\n')}`);
+                    currentChunkCommands = [];
+                    totalBlocksInCurrentChunk = 0;
+                }
+
+                currentChunkCommands.push(command);
+                totalBlocksInCurrentChunk += group.count;
+            });
+
+            // 最後のチャンクを追加
+            if (currentChunkCommands.length > 0) {
+                chunks.push(`// Block Count: ${totalBlocksInCurrentChunk}\n${currentChunkCommands.join('\n')}`);
             }
 
-            if (chunks.length === 0) {
-                chunks.push(`// 変換結果: 透過ピクセルのみのため、生成されるブロックはありません。`);
+            if (chunks.length === 0 && totalBlocks > 0) {
+                 // 予期せぬエラーで分割されなかった場合 (念のため)
+                 chunks.push(`// Block Count: ${totalBlocks}\n${currentChunkCommands.join('\n')}`);
+            } else if (chunks.length === 0) {
+                chunks.push(`// No blocks were generated.`);
             }
             
             return chunks;
@@ -471,7 +528,6 @@
 
                         let current_height = Math.min(height, max_h);
                         
-                        // World CodeのY座標 (BloxdのY軸は逆転している)
                         // y_currentは現在の処理対象矩形の画像上での開始Y座標
                         let y_current = y + (height - current_height);
                         
@@ -578,9 +634,12 @@ tick=()=>{
                 tabContainer.classList.remove('hidden');
                 
                 codes.forEach((code, i) => {
+                    // タブテキストはCode Block #1 の形式
+                    const tabText = code.match(/\/\/ Block Count: (\d+)/) ? `Block ${i+1} (${code.match(/\/\/ Block Count: (\d+)/)[1]} blocks)` : `Block ${i+1}`;
+
                     const btn = document.createElement('button');
                     btn.className = `px-4 py-2 text-sm transition-colors rounded-t-lg font-bold border-b-2 ${i===0 ? 'border-bloxd-secondary text-bloxd-secondary bg-white' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'}`;
-                    btn.innerText = `Block ${i+1}`;
+                    btn.innerText = tabText;
                     btn.setAttribute('data-index', i);
                     
                     btn.onclick = (e) => {
@@ -593,7 +652,7 @@ tick=()=>{
                         e.target.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:bg-gray-100');
 
                         textArea.value = currentCodes[index];
-                        charCount.innerText = `文字数: ${currentCodes[index].length}`;
+                        charCount.innerText = `ブロック数 (短縮前): ${currentCodes[index].match(/\/\/ Block Count: (\d+)/)?.[1] || '-'} / 文字数: ${currentCodes[index].length}`;
                         copyButton.onclick = () => copyText(currentCodes[index]);
                     };
                     tabContainer.appendChild(btn);
@@ -602,7 +661,7 @@ tick=()=>{
                 // 初期表示
                 const initialCode = codes[0] || "";
                 textArea.value = initialCode;
-                charCount.innerText = `文字数: ${initialCode.length}`;
+                charCount.innerText = `ブロック数 (短縮前): ${initialCode.match(/\/\/ Block Count: (\d+)/)?.[1] || '-'} / 文字数: ${initialCode.length}`;
                 copyButton.onclick = () => copyText(initialCode);
                 if (codes.length > 0) {
                     // 最初のタブをアクティブにする
